@@ -17,8 +17,10 @@ namespace HSHONAD_Launcher
 {
     public partial class Form1 : Form
     {
-        private const string BackendBaseUrl =
+        private const string DefaultBackendBaseUrl =
             "https://hshonad-backend.onrender.com";
+
+        private string BackendBaseUrl => LoadBackendBaseUrl();
 
         private static readonly HttpClient Http =
             new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
@@ -39,6 +41,7 @@ namespace HSHONAD_Launcher
 
         private string GamePathFile => Path.Combine(UserDataDirectory, "game-path.txt");
         private string ProxyAllowlistFile => Path.Combine(UserDataDirectory, "proxy-allowlist.txt");
+        private string BackendUrlFile => Path.Combine(UserDataDirectory, "backend-url.txt");
 
         public Form1()
         {
@@ -82,6 +85,11 @@ namespace HSHONAD_Launcher
                 webView.CoreWebView2.NavigationCompleted += async (_, _) =>
                 {
                     await SendGameFolderStatusAsync("พร้อมใช้งาน");
+                    await SendToPageAsync(new
+                    {
+                        type = "backendUrl",
+                        url = BackendBaseUrl
+                    });
                     await SendToPageAsync(new
                     {
                         type = "proxyAllowlist",
@@ -158,6 +166,13 @@ namespace HSHONAD_Launcher
                         await SaveProxyAllowlistAsync(
                             doc.RootElement.TryGetProperty("hosts", out var hostsEl)
                                 ? hostsEl.GetString() ?? ""
+                                : "");
+                        break;
+
+                    case "saveBackendUrl":
+                        await SaveBackendUrlAsync(
+                            doc.RootElement.TryGetProperty("url", out var urlEl)
+                                ? urlEl.GetString() ?? ""
                                 : "");
                         break;
                 }
@@ -308,6 +323,62 @@ namespace HSHONAD_Launcher
                     type = "discordStatus",
                     status = "error",
                     message = "Login ไม่สำเร็จ: " + ex.Message
+                });
+            }
+        }
+
+        private string LoadBackendBaseUrl()
+        {
+            try
+            {
+                if (File.Exists(BackendUrlFile))
+                {
+                    string value = File.ReadAllText(BackendUrlFile).Trim().TrimEnd('/');
+                    if (Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+                        (uri.Scheme == Uri.UriSchemeHttps ||
+                         (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)))
+                        return value;
+                }
+            }
+            catch { }
+
+            return DefaultBackendBaseUrl;
+        }
+
+        private async Task SaveBackendUrlAsync(string input)
+        {
+            string value = input.Trim().TrimEnd('/');
+            if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+                !(uri.Scheme == Uri.UriSchemeHttps ||
+                  (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)))
+            {
+                await SendToPageAsync(new
+                {
+                    type = "backendUrlStatus",
+                    status = "error",
+                    message = "Backend URL ต้องใช้ HTTPS ยกเว้น localhost สำหรับทดสอบ"
+                });
+                return;
+            }
+
+            try
+            {
+                Directory.CreateDirectory(UserDataDirectory);
+                File.WriteAllText(BackendUrlFile, value);
+                await SendToPageAsync(new
+                {
+                    type = "backendUrl",
+                    url = value,
+                    message = "บันทึก Backend URL ให้ Launcher และ Manifest แล้ว"
+                });
+            }
+            catch (Exception ex)
+            {
+                await SendToPageAsync(new
+                {
+                    type = "backendUrlStatus",
+                    status = "error",
+                    message = "บันทึก Backend URL ไม่สำเร็จ: " + ex.Message
                 });
             }
         }
