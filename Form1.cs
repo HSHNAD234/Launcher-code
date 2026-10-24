@@ -24,6 +24,7 @@ namespace HSHONAD_Launcher
         private CancellationTokenSource? _loginCts;
         private LocalProxyServer? _proxy;
         private bool _autoLoginStarted;
+        private bool _loginInProgress;
 
         public Form1() => InitializeComponent();
 
@@ -105,10 +106,28 @@ namespace HSHONAD_Launcher
                         break;
 
                     case "discordWhitelistLogin":
+                        if (_loginInProgress)
+                        {
+                            await SendToPageAsync(new
+                            {
+                                type = "discordStatus",
+                                status = "pending",
+                                message = "กำลังดำเนินการ Login อยู่ กรุณารอผลก่อน"
+                            });
+                            break;
+                        }
+                        _loginInProgress = true;
                         _loginCts?.Cancel();
                         _loginCts?.Dispose();
                         _loginCts = new CancellationTokenSource();
-                        await StartDiscordLoginAsync(_loginCts.Token);
+                        try
+                        {
+                            await StartDiscordLoginAsync(_loginCts.Token);
+                        }
+                        finally
+                        {
+                            _loginInProgress = false;
+                        }
                         break;
 
                     case "logout":
