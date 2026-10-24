@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
-
 permissions:
   contents: write
 
@@ -24,11 +22,16 @@ jobs:
       - name: Publish Windows x64
         shell: pwsh
         run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart([char[]]@('v', 'V'))
+          if (-not $version) { throw "Tag must contain a version, e.g. v1.0.1" }
+          $html = Get-Content "wwwroot/index.html" -Raw
+          $html = $html.Replace("__LAUNCHER_VERSION__", $version)
+          Set-Content "wwwroot/index.html" -Value $html -NoNewline -Encoding utf8
           dotnet publish "HSHONAD Launcher.csproj" `
             --configuration Release `
             --runtime win-x64 `
             --self-contained true `
-            -p:Version=${{ github.ref_name }} `
+            "-p:Version=$version" `
             -p:PublishSingleFile=false `
             --output publish
 
