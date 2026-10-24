@@ -30,6 +30,9 @@ namespace HSHONAD_Launcher
         {
             try
             {
+                if (await LauncherUpdater.CheckAndApplyAsync())
+                    return;
+
                 string htmlPath = Path.Combine(
                     AppContext.BaseDirectory, "wwwroot", "index.html");
 
