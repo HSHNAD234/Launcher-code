@@ -4,6 +4,7 @@ using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -14,6 +15,10 @@ namespace HSHONAD_Launcher
     {
         private const string LatestReleaseUrl = "https://api.github.com/repos/HSHNAD234/Launcher-code/releases/latest";
         private const string PackageName = "HSHONAD-Launcher-win-x64.zip";
+        private static readonly string UpdateDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "HSHONAD Launcher", "Updates");
+        private static readonly string PendingPackagePath = Path.Combine(UpdateDirectory, "pending.zip");
         private static readonly HttpClient Http = CreateHttpClient();
 
         private static HttpClient CreateHttpClient()
@@ -28,6 +33,14 @@ namespace HSHONAD_Launcher
         {
             try
             {
+                // Install a package downloaded during the previous session.
+                if (File.Exists(PendingPackagePath))
+                {
+                    StartPendingUpdateInstaller();
+                    Application.Exit();
+                    return true;
+                }
+
                 using var response = await Http.GetAsync(LatestReleaseUrl);
                 if (!response.IsSuccessStatusCode) return false;
 
@@ -57,77 +70,108 @@ namespace HSHONAD_Launcher
                     !string.Equals(packageUri.Host, "github.com", StringComparison.OrdinalIgnoreCase))
                     return false;
 
-                string tempRoot = Path.Combine(Path.GetTempPath(), "HSHONAD-Launcher-Update-" + Guid.NewGuid().ToString("N"));
-                Directory.CreateDirectory(tempRoot);
-                string zipPath = Path.Combine(tempRoot, PackageName);
-                string extractPath = Path.Combine(tempRoot, "extract");
-                Directory.CreateDirectory(extractPath);
-
-                using (var packageResponse = await Http.GetAsync(packageUri, HttpCompletionOption.ResponseHeadersRead))
+                Directory.CreateDirectory(UpdateDirectory);
+                string tempZipPath = PendingPackagePath + ".download";
+                try
                 {
-                    packageResponse.EnsureSuccessStatusCode();
-                    await using var source = await packageResponse.Content.ReadAsStreamAsync();
-                    await using var destination = new FileStream(zipPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-                    await source.CopyToAsync(destination);
+                    using (var packageResponse = await Http.GetAsync(packageUri, HttpCompletionOption.ResponseHeadersRead))
+                    {
+                        packageResponse.EnsureSuccessStatusCode();
+                        await using var source = await packageResponse.Content.ReadAsStreamAsync();
+                        await using var destination = new FileStream(tempZipPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                        await source.CopyToAsync(destination);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(expectedHash) &&
+                        expectedHash.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        await using var verifyStream = File.OpenRead(tempZipPath);
+                        byte[] hash = await SHA256.HashDataAsync(verifyStream);
+                        string actualHash = Convert.ToHexString(hash).ToLowerInvariant();
+                        string releaseHash = expectedHash.Substring("sha256:".Length).ToLowerInvariant();
+                        if (!CryptographicOperations.FixedTimeEquals(
+                            Encoding.ASCII.GetBytes(actualHash),
+                            Encoding.ASCII.GetBytes(releaseHash)))
+                            throw new InvalidDataException("ไฟล์อัปเดตไม่ผ่านการตรวจสอบ SHA-256");
+                    }
+
+                    if (File.Exists(PendingPackagePath)) File.Delete(PendingPackagePath);
+                    File.Move(tempZipPath, PendingPackagePath);
+                }
+                finally
+                {
+                    if (File.Exists(tempZipPath)) File.Delete(tempZipPath);
                 }
 
-                if (!string.IsNullOrWhiteSpace(expectedHash) &&
-                    expectedHash.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
-                {
-                    await using var verifyStream = File.OpenRead(zipPath);
-                    byte[] hash = await SHA256.HashDataAsync(verifyStream);
-                    string actualHash = Convert.ToHexString(hash).ToLowerInvariant();
-                    string releaseHash = expectedHash.Substring("sha256:".Length).ToLowerInvariant();
-                    if (!CryptographicOperations.FixedTimeEquals(
-                        System.Text.Encoding.ASCII.GetBytes(actualHash),
-                        System.Text.Encoding.ASCII.GetBytes(releaseHash)))
-                        throw new InvalidDataException("ไฟล์อัปเดตไม่ผ่านการตรวจสอบ SHA-256");
-                }
+                MessageBox.Show(
+                    $"ดาวน์โหลด Launcher เวอร์ชัน {latestVersion} สำเร็จแล้ว\n\n" +
+                    "อัปเดตจะถูกติดตั้งเมื่อคุณปิด Launcher แล้วเปิดใหม่ครั้งถัดไป",
+                    "HSHONAD Launcher Update",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
 
-                string installPath = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                string exePath = Environment.ProcessPath ?? throw new InvalidOperationException("ไม่พบตำแหน่งไฟล์ Launcher");
-                string exeName = Path.GetFileName(exePath);
-                string processName = Path.GetFileNameWithoutExtension(exeName);
-                string scriptPath = Path.Combine(tempRoot, "apply-update.ps1");
-                string script = $@"
-$ErrorActionPreference = 'Stop'
-$install = '{EscapePowerShell(installPath)}'
-$zip = '{EscapePowerShell(zipPath)}'
-$stage = '{EscapePowerShell(extractPath)}'
-$processName = '{EscapePowerShell(processName)}'
-$exeName = '{EscapePowerShell(exeName)}'
-while (Get-Process -Name $processName -ErrorAction SilentlyContinue) {{
-    Start-Sleep -Seconds 1
-}}
-Expand-Archive -LiteralPath $zip -DestinationPath $stage -Force
-Copy-Item -Path (Join-Path $stage '*') -Destination $install -Recurse -Force
-$exe = Join-Path $install $exeName
-if (-not (Test-Path -LiteralPath $exe)) {{
-    throw ""Updated executable not found: $exe""
-}}
-Start-Process -FilePath $exe
-";
-                await File.WriteAllTextAsync(scriptPath, script, new System.Text.UTF8Encoding(false));
-
-                var startInfo = new ProcessStartInfo { FileName = "powershell.exe", UseShellExecute = false, CreateNoWindow = true };
-                startInfo.ArgumentList.Add("-NoProfile");
-                startInfo.ArgumentList.Add("-ExecutionPolicy");
-                startInfo.ArgumentList.Add("Bypass");
-                startInfo.ArgumentList.Add("-File");
-                startInfo.ArgumentList.Add(scriptPath);
-                Process.Start(startInfo);
-
-                MessageBox.Show($"พบ Launcher เวอร์ชันใหม่ {latestVersion}\nกำลังติดตั้งอัปเดตและเปิด Launcher ใหม่",
-                    "HSHONAD Launcher Update", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                Application.Exit();
-                return true;
+                // Keep the current session running. The user chooses when to close it.
+                return false;
             }
             catch (Exception ex)
             {
-                MessageBox.Show("ตรวจสอบ/ติดตั้งอัปเดต Launcher ไม่สำเร็จ จึงเปิดเวอร์ชันปัจจุบันต่อไป\n\n" + ex.Message,
-                    "HSHONAD Launcher Update", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(
+                    "ตรวจสอบหรือดาวน์โหลดอัปเดตไม่สำเร็จ จึงเปิดเวอร์ชันปัจจุบันต่อไป\n\n" + ex.Message,
+                    "HSHONAD Launcher Update",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
                 return false;
             }
+        }
+
+        private static void StartPendingUpdateInstaller()
+        {
+            string installPath = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string exePath = Environment.ProcessPath ?? throw new InvalidOperationException("ไม่พบตำแหน่งไฟล์ Launcher");
+            string exeName = Path.GetFileName(exePath);
+            string processName = Path.GetFileNameWithoutExtension(exeName);
+            string workPath = Path.Combine(UpdateDirectory, "install-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(workPath);
+
+            string scriptPath = Path.Combine(workPath, "apply-update.ps1");
+            string extractPath = Path.Combine(workPath, "extract");
+            string logPath = Path.Combine(UpdateDirectory, "update.log");
+
+            string script = $@"
+$ErrorActionPreference = 'Stop'
+$install = '{EscapePowerShell(installPath)}'
+$zip = '{EscapePowerShell(PendingPackagePath)}'
+$stage = '{EscapePowerShell(extractPath)}'
+$processName = '{EscapePowerShell(processName)}'
+$exeName = '{EscapePowerShell(exeName)}'
+$log = '{EscapePowerShell(logPath)}'
+try {{
+    while (Get-Process -Name $processName -ErrorAction SilentlyContinue) {{ Start-Sleep -Milliseconds 500 }}
+    Expand-Archive -LiteralPath $zip -DestinationPath $stage -Force
+    Copy-Item -Path (Join-Path $stage '*') -Destination $install -Recurse -Force
+    $exe = Join-Path $install $exeName
+    if (-not (Test-Path -LiteralPath $exe)) {{ throw ""Updated executable not found: $exe"" }}
+    Remove-Item -LiteralPath $zip -Force
+    Start-Process -FilePath $exe
+}} catch {{
+    $_ | Out-String | Set-Content -LiteralPath $log -Encoding UTF8
+}}
+";
+            File.WriteAllText(scriptPath, script, new UTF8Encoding(false));
+
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+            startInfo.ArgumentList.Add("-NoProfile");
+            startInfo.ArgumentList.Add("-ExecutionPolicy");
+            startInfo.ArgumentList.Add("Bypass");
+            startInfo.ArgumentList.Add("-File");
+            startInfo.ArgumentList.Add(scriptPath);
+            Process.Start(startInfo);
         }
 
         private static string ReadString(JsonElement element, string property) =>
