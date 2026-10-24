@@ -43,6 +43,7 @@ namespace HSHONAD_Launcher
         private string GamePathFile => Path.Combine(UserDataDirectory, "game-path.txt");
         private string ProxyAllowlistFile => Path.Combine(UserDataDirectory, "proxy-allowlist.txt");
         private string BackendUrlFile => Path.Combine(UserDataDirectory, "backend-url.txt");
+        private string HostsRegistryUrlFile => Path.Combine(UserDataDirectory, "hosts-registry-url.txt");
 
         public Form1()
         {
@@ -95,6 +96,11 @@ namespace HSHONAD_Launcher
                     {
                         type = "proxyAllowlist",
                         hosts = string.Join(Environment.NewLine, LoadProxyAllowedHosts())
+                    });
+                    await SendToPageAsync(new
+                    {
+                        type = "hostsRegistryUrl",
+                        url = LoadHostsRegistryUrl()
                     });
                     await RefreshGameStateAsync();
                 };
@@ -162,6 +168,17 @@ namespace HSHONAD_Launcher
 
                     case "inspectHosts":
                         await InspectHostsFileAsync();
+                        break;
+
+                    case "loadHostsRegistry":
+                        await LoadHostsRegistryAsync();
+                        break;
+
+                    case "saveHostsRegistryUrl":
+                        await SaveHostsRegistryUrlAsync(
+                            doc.RootElement.TryGetProperty("url", out var registryUrlEl)
+                                ? registryUrlEl.GetString() ?? ""
+                                : "");
                         break;
 
                     case "restoreHosts":
@@ -393,6 +410,152 @@ namespace HSHONAD_Launcher
                     type = "backendUrlStatus",
                     status = "error",
                     message = "บันทึก Backend URL ไม่สำเร็จ: " + ex.Message
+                });
+            }
+        }
+
+        private string LoadHostsRegistryUrl()
+        {
+            try
+            {
+                if (!File.Exists(HostsRegistryUrlFile))
+                    return "";
+
+                string value = File.ReadAllText(HostsRegistryUrlFile).Trim().TrimEnd('/');
+                if (Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+                    (uri.Scheme == Uri.UriSchemeHttps ||
+                     (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)))
+                    return value;
+            }
+            catch { }
+
+            return "";
+        }
+
+        private async Task SaveHostsRegistryUrlAsync(string input)
+        {
+            string value = input.Trim().TrimEnd('/');
+            if (value.Length > 0 &&
+                (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+                 !(uri.Scheme == Uri.UriSchemeHttps ||
+                   (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback))))
+            {
+                await SendToPageAsync(new
+                {
+                    type = "hostsRegistryUrlStatus",
+                    status = "error",
+                    message = "Hosts Registry URL ต้องใช้ HTTPS ยกเว้น localhost สำหรับทดสอบ"
+                });
+                return;
+            }
+
+            try
+            {
+                Directory.CreateDirectory(UserDataDirectory);
+                if (value.Length == 0)
+                {
+                    if (File.Exists(HostsRegistryUrlFile))
+                        File.Delete(HostsRegistryUrlFile);
+                }
+                else
+                {
+                    File.WriteAllText(HostsRegistryUrlFile, value);
+                }
+
+                await SendToPageAsync(new
+                {
+                    type = "hostsRegistryUrl",
+                    url = value,
+                    message = value.Length == 0
+                        ? "ล้าง Hosts Registry URL แล้ว"
+                        : "บันทึก Hosts Registry URL แล้ว"
+                });
+            }
+            catch (Exception ex)
+            {
+                await SendToPageAsync(new
+                {
+                    type = "hostsRegistryUrlStatus",
+                    status = "error",
+                    message = "บันทึก Hosts Registry URL ไม่สำเร็จ: " + ex.Message
+                });
+            }
+        }
+
+        private async Task LoadHostsRegistryAsync()
+        {
+            string baseUrl = LoadHostsRegistryUrl();
+            if (string.IsNullOrWhiteSpace(baseUrl))
+            {
+                await SendToPageAsync(new
+                {
+                    type = "hostsRegistryStatus",
+                    status = "error",
+                    summary = "ยังไม่ได้ตั้งค่า Hosts Registry URL",
+                    message = "เปิด Settings แล้วใส่ URL ของเว็บ Hosts Registry ก่อน"
+                });
+                return;
+            }
+
+            try
+            {
+                using var response = await Http.GetAsync(baseUrl + "/api/hosts-config");
+                string body = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                    throw new InvalidOperationException(
+                        $"Hosts Registry ตอบกลับ HTTP {(int)response.StatusCode}");
+
+                using var document = JsonDocument.Parse(body);
+                if (!document.RootElement.TryGetProperty("hosts", out var hostsElement) ||
+                    hostsElement.ValueKind != JsonValueKind.Array)
+                    throw new InvalidOperationException("รูปแบบข้อมูลทะเบียนโดเมนไม่ถูกต้อง");
+
+                var lines = new List<string>
+                {
+                    "แหล่งข้อมูล: " + baseUrl,
+                    "จำนวนโดเมน: " + hostsElement.GetArrayLength().ToString()
+                };
+
+                if (document.RootElement.TryGetProperty("updatedAt", out var updatedEl) &&
+                    updatedEl.ValueKind == JsonValueKind.String)
+                {
+                    lines.Add("อัปเดตล่าสุด: " + (updatedEl.GetString() ?? "-"));
+                }
+
+                lines.Add("");
+                foreach (var item in hostsElement.EnumerateArray())
+                {
+                    string domain = GetString(item, "domain", "(ไม่มีชื่อโดเมน)");
+                    bool enabled = item.TryGetProperty("enabled", out var enabledEl) &&
+                                   enabledEl.ValueKind == JsonValueKind.True;
+                    string purpose = GetString(item, "purpose", "");
+                    string note = GetString(item, "note", "");
+
+                    lines.Add((enabled ? "[เปิด]" : "[ปิด]") + " " + domain);
+                    if (!string.IsNullOrWhiteSpace(purpose))
+                        lines.Add("  วัตถุประสงค์: " + purpose);
+                    if (!string.IsNullOrWhiteSpace(note))
+                        lines.Add("  หมายเหตุ: " + note);
+                    lines.Add("");
+                }
+
+                await SendToPageAsync(new
+                {
+                    type = "hostsRegistryStatus",
+                    status = "success",
+                    summary = string.Join(Environment.NewLine, lines),
+                    message = "โหลดทะเบียนโดเมนจาก Web Database แล้ว (อ่านอย่างเดียว)"
+                });
+            }
+            catch (Exception ex)
+            {
+                await SendToPageAsync(new
+                {
+                    type = "hostsRegistryStatus",
+                    status = "error",
+                    summary = "โหลดข้อมูลจาก Web Database ไม่สำเร็จ",
+                    message = "โหลดทะเบียนโดเมนไม่สำเร็จ: " + ex.Message
                 });
             }
         }
