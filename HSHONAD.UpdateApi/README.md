@@ -10,8 +10,8 @@ Small .NET 10 API that reads the latest public GitHub Release and exposes a laun
 ## Deploy on Render
 
 Create a Web Service from this repository using Docker.
-- Root Directory: repository root.
-- Dockerfile Path: `HSHONAD.UpdateApi/Dockerfile`.
+- Root Directory: `HSHONAD.UpdateApi`.
+- Dockerfile Path: `Dockerfile`.
 - Health Check Path: `/health`.
 - Optional environment variables: `GitHub__Owner=HSHNAD234` and `GitHub__Repository=Launcher-code` (defaults already match).
 
