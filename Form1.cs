@@ -160,6 +160,14 @@ namespace HSHONAD_Launcher
                         await ScanGameAsync();
                         break;
 
+                    case "inspectHosts":
+                        await InspectHostsFileAsync();
+                        break;
+
+                    case "restoreHosts":
+                        await RestoreHostsFileAsync();
+                        break;
+
                     case "launchGame":
                         await LaunchGameAsync();
                         break;
@@ -531,6 +539,80 @@ namespace HSHONAD_Launcher
                     status = "error",
                     message = "อ่านข้อมูลโฟลเดอร์เกมไม่ได้: " + ex.Message,
                     summary = "ตรวจสอบไม่สำเร็จ"
+                });
+            }
+        }
+
+        private async Task InspectHostsFileAsync()
+        {
+            try
+            {
+                HostsFileInspection inspection = HostsFileManager.Inspect();
+                string summary = inspection.Entries.Count == 0
+                    ? "ไม่พบรายการ Hosts ที่ override โดเมนเป้าหมาย"
+                    : string.Join(
+                        Environment.NewLine,
+                        inspection.Entries.Select(entry =>
+                            $"บรรทัด {entry.LineNumber}: {entry.Line}"));
+
+                await SendToPageAsync(new
+                {
+                    type = "hostsStatus",
+                    status = inspection.Entries.Count == 0 ? "clean" : "overrides_found",
+                    path = inspection.FilePath,
+                    summary,
+                    message = inspection.Entries.Count == 0
+                        ? "ตรวจสอบ Hosts แล้ว: ไม่พบรายการ override สำหรับโดเมนเป้าหมาย"
+                        : $"พบรายการ Hosts ที่เกี่ยวข้อง {inspection.Entries.Count} บรรทัด"
+                });
+            }
+            catch (Exception ex)
+            {
+                await SendToPageAsync(new
+                {
+                    type = "hostsStatus",
+                    status = "error",
+                    summary = "อ่านไฟล์ Hosts ไม่สำเร็จ",
+                    message = "ตรวจสอบ Hosts ไม่สำเร็จ: " + ex.Message
+                });
+            }
+        }
+
+        private async Task RestoreHostsFileAsync()
+        {
+            try
+            {
+                HostsFileRepairResult result = HostsFileManager.RemoveOverrides();
+                string message = result.Changed
+                    ? $"ลบ Host override ของโดเมนเป้าหมาย {result.RemovedHostNames} รายการแล้ว และคืนค่าให้ใช้ DNS ตามปกติ"
+                    : "ไม่พบ Host override ของโดเมนเป้าหมาย จึงไม่มีอะไรต้องแก้ไข";
+
+                await SendToPageAsync(new
+                {
+                    type = "hostsRepairStatus",
+                    status = result.Changed ? "repaired" : "clean",
+                    path = result.FilePath,
+                    removedHostNames = result.RemovedHostNames,
+                    backupPath = result.BackupPath,
+                    message
+                });
+            }
+            catch (UnauthorizedAccessException)
+            {
+                await SendToPageAsync(new
+                {
+                    type = "hostsRepairStatus",
+                    status = "error",
+                    message = "Windows ปฏิเสธสิทธิ์เขียนไฟล์ Hosts ให้ปิด Launcher แล้วเปิดด้วย Run as administrator จากนั้นลองอีกครั้ง"
+                });
+            }
+            catch (Exception ex)
+            {
+                await SendToPageAsync(new
+                {
+                    type = "hostsRepairStatus",
+                    status = "error",
+                    message = "แก้ Hosts ไม่สำเร็จ: " + ex.Message
                 });
             }
         }

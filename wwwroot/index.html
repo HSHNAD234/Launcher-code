@@ -946,16 +946,30 @@ function renderGameSelection() {
 }
 
 function renderFixPopup() {
-  openPopup('Fix Game — Read-only check', `
+  openPopup('Fix Game & Hosts', `
     <div class="auth">
       <p class="auth-copy">
-        ตรวจสอบไฟล์เกมที่เลือกแบบอ่านอย่างเดียวก่อน ยังไม่ลบ เขียนทับ หรือดาวน์โหลดไฟล์ใด ๆ
-        การซ่อมจริงจะเปิดใช้เมื่อมี Manifest และ SHA-256 ที่เชื่อถือได้
+        ตรวจสอบไฟล์เกมที่เลือกแบบอ่านอย่างเดียวก่อน ยังไม่ลบ เขียนทับ หรือดาวน์โหลดไฟล์เกมใด ๆ
+        การซ่อมไฟล์เกมจริงต้องใช้ Manifest และ SHA-256 ที่เชื่อถือได้
       </p>
       <div class="news" id="fixScanResult" style="text-align:left;white-space:pre-wrap;overflow-wrap:anywhere" aria-live="polite">
         ${escapeHTML(window.gameScanSummary || 'กดปุ่มเพื่อตรวจสอบไฟล์เกม')}
       </div>
       <button class="primary" id="runGameScan" style="margin-top:14px">ตรวจสอบไฟล์เกม</button>
+    </div>
+
+    <div class="news" style="margin-top:16px;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere">
+      <strong>Windows Hosts — HSH API</strong>
+      <p class="auth-copy" style="margin:8px 0">
+        ตรวจสอบรายการที่กำหนดเองของโดเมน API ด้านล่าง หรือคืนค่าให้โดเมนเหล่านี้ใช้ DNS ปกติ
+        โปรแกรมจะไม่เปลี่ยนโดเมนอื่น และจะสำรองไฟล์ Hosts ก่อนแก้ไข
+      </p>
+      <div id="hostsScanResult" aria-live="polite">${escapeHTML(window.hostsScanSummary || 'กด “ตรวจสอบ Hosts” เพื่อดูรายการที่เกี่ยวข้อง')}</div>
+      <button class="secondary" id="inspectHostsBtn" style="margin-top:12px">ตรวจสอบ Hosts</button>
+      <button class="primary" id="restoreHostsBtn" style="margin-top:8px">ลบ Override / คืนค่า DNS</button>
+      <p class="auth-copy" style="font-size:11px;margin:8px 0 0">
+        หาก Windows ปฏิเสธสิทธิ์แก้ไข ให้เปิด Launcher ด้วย Run as administrator เฉพาะตอนคืนค่า Hosts
+      </p>
     </div>
   `);
   $('runGameScan').onclick = () => {
@@ -963,6 +977,20 @@ function renderFixPopup() {
     $('runGameScan').disabled = true;
     $('fixScanResult').textContent = 'กำลังตรวจสอบ...';
     window.chrome.webview.postMessage({ type: 'scanGame' });
+  };
+  $('inspectHostsBtn').onclick = () => {
+    if (!window.chrome?.webview) return toast('ต้องเปิดผ่าน HSHONAD Launcher บน Windows');
+    $('hostsScanResult').textContent = 'กำลังอ่านไฟล์ Hosts...';
+    window.chrome.webview.postMessage({ type: 'inspectHosts' });
+  };
+  $('restoreHostsBtn').onclick = () => {
+    if (!window.chrome?.webview) return toast('ต้องเปิดผ่าน HSHONAD Launcher บน Windows');
+    const confirmed = confirm(
+      'ลบเฉพาะรายการ Hosts ของ api.homesweethomegame.com, hshsapi.homesweethomegame.com, logapi.homesweethomegame.com และ boatltpk เพื่อให้ระบบใช้ DNS ปกติ? ไฟล์เดิมจะถูกสำรองก่อนแก้ไข'
+    );
+    if (!confirmed) return;
+    $('hostsScanResult').textContent = 'กำลังตรวจสอบและคืนค่า Hosts...';
+    window.chrome.webview.postMessage({ type: 'restoreHosts' });
   };
 }
 
@@ -1058,6 +1086,30 @@ if (window.chrome?.webview) {
       const message = $('gameFolderMessage');
       if (message) message.textContent = data.message || '';
       if (data.status === 'error') toast(data.message || 'ตรวจสอบเกมไม่สำเร็จ');
+    }
+
+    if (data.type === 'hostsStatus') {
+      window.hostsScanSummary = data.summary || data.message || '';
+      const result = $('hostsScanResult');
+      if (result) {
+        result.textContent = [
+          data.path ? 'ไฟล์: ' + data.path : '',
+          window.hostsScanSummary
+        ].filter(Boolean).join('\\n');
+      }
+      if (data.message) toast(data.message);
+    }
+
+    if (data.type === 'hostsRepairStatus') {
+      const result = $('hostsScanResult');
+      const detail = [
+        data.message || '',
+        data.backupPath ? 'สำรองไฟล์เดิมไว้ที่: ' + data.backupPath : '',
+        data.path ? 'ไฟล์ Hosts: ' + data.path : ''
+      ].filter(Boolean).join('\\n');
+      window.hostsScanSummary = detail;
+      if (result) result.textContent = detail;
+      if (data.message) toast(data.message);
     }
 
     if (data.type === 'gameStatus') {
