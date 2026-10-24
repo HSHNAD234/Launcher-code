@@ -23,6 +23,7 @@ namespace HSHONAD_Launcher
 
         private CancellationTokenSource? _loginCts;
         private LocalProxyServer? _proxy;
+        private bool _autoLoginStarted;
 
         public Form1() => InitializeComponent();
 
@@ -96,6 +97,11 @@ namespace HSHONAD_Launcher
                         {
                             _backendBaseUrl = configuredUri.ToString().TrimEnd('/');
                         }
+                        if (!_autoLoginStarted)
+                        {
+                            _autoLoginStarted = true;
+                            await TryAutoLoginAsync();
+                        }
                         break;
 
                     case "discordWhitelistLogin":
@@ -107,6 +113,7 @@ namespace HSHONAD_Launcher
 
                     case "logout":
                         _loginCts?.Cancel();
+                        await RevokeSavedSessionAsync();
                         await SendToPageAsync(new
                         {
                             type = "discordStatus",
@@ -277,15 +284,37 @@ namespace HSHONAD_Launcher
 
                     if (status == "approved")
                     {
+                        using var claimRequest = new HttpRequestMessage(
+                            HttpMethod.Post,
+                            _backendBaseUrl + "/api/launcher/device-sessions/" +
+                            Uri.EscapeDataString(sessionId) + "/claim");
+                        claimRequest.Headers.Authorization =
+                            new AuthenticationHeaderValue("Bearer", secret);
+                        claimRequest.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+
+                        using var claimResponse = await Http.SendAsync(claimRequest, token);
+                        string claimBody = await claimResponse.Content.ReadAsStringAsync(token);
+                        if (!claimResponse.IsSuccessStatusCode)
+                        {
+                            throw new Exception($"บันทึกเซสชันไม่สำเร็จ (HTTP {(int)claimResponse.StatusCode}): {claimBody}");
+                        }
+
+                        using var claimDoc = JsonDocument.Parse(claimBody);
+                        var claim = claimDoc.RootElement;
+                        string persistentToken = GetString(claim, "session_token", "");
+                        if (string.IsNullOrWhiteSpace(persistentToken))
+                            throw new Exception("Backend ไม่ได้ส่ง Session Token กลับมา");
+
+                        SessionTokenStore.Save(persistentToken);
                         await SendToPageAsync(new
                         {
                             type = "discordStatus",
                             status = "approved",
-                            username = GetString(data, "username", "Discord User"),
-                            discordId = GetString(data, "discord_user_id", ""),
-                            avatarUrl = GetString(data, "avatar_url", ""),
+                            username = GetString(claim, "username", GetString(data, "username", "Discord User")),
+                            discordId = GetString(claim, "discord_user_id", GetString(data, "discord_user_id", "")),
+                            avatarUrl = GetString(claim, "avatar_url", GetString(data, "avatar_url", "")),
                             whitelistStatus = "Approved",
-                            message = "ตรวจสอบ Whitelist ผ่านแล้ว"
+                            message = "ตรวจสอบ Whitelist ผ่านแล้ว และบันทึกเซสชันอย่างปลอดภัย"
                         });
                         return;
                     }
@@ -330,6 +359,111 @@ namespace HSHONAD_Launcher
                     status = "error",
                     message = "Login ไม่สำเร็จ: " + ex.Message
                 });
+            }
+        }
+
+        private async Task TryAutoLoginAsync()
+        {
+            string? savedToken = SessionTokenStore.Load();
+            if (string.IsNullOrWhiteSpace(savedToken))
+                return;
+
+            try
+            {
+                await SendToPageAsync(new
+                {
+                    type = "discordStatus",
+                    status = "pending",
+                    message = "กำลังตรวจสอบเซสชันที่บันทึกไว้...",
+                    whitelistStatus = "กำลังตรวจสอบ Whitelist..."
+                });
+
+                using var request = new HttpRequestMessage(
+                    HttpMethod.Get,
+                    _backendBaseUrl + "/api/launcher/sessions/validate");
+                request.Headers.Authorization =
+                    new AuthenticationHeaderValue("Bearer", savedToken);
+
+                using var response = await Http.SendAsync(request);
+                string body = await response.Content.ReadAsStringAsync();
+
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+                    response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                {
+                    SessionTokenStore.Clear();
+                    await SendToPageAsync(new
+                    {
+                        type = "discordStatus",
+                        status = "logged_out",
+                        message = "เซสชันหมดอายุหรือบัญชีไม่ผ่าน Whitelist กรุณา Login ใหม่"
+                    });
+                    return;
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    // Keep the protected token on transient service/database failures.
+                    await SendToPageAsync(new
+                    {
+                        type = "discordStatus",
+                        status = "error",
+                        message = $"ตรวจสอบเซสชันไม่ได้ (HTTP {(int)response.StatusCode}) กรุณาลองใหม่ภายหลัง"
+                    });
+                    return;
+                }
+
+                using var doc = JsonDocument.Parse(body);
+                var data = doc.RootElement;
+                if (!data.TryGetProperty("valid", out var valid) || valid.ValueKind != JsonValueKind.True)
+                {
+                    SessionTokenStore.Clear();
+                    await SendToPageAsync(new { type = "discordStatus", status = "logged_out" });
+                    return;
+                }
+
+                await SendToPageAsync(new
+                {
+                    type = "discordStatus",
+                    status = "approved",
+                    username = GetString(data, "username", "Discord User"),
+                    discordId = GetString(data, "discord_user_id", ""),
+                    avatarUrl = GetString(data, "avatar_url", ""),
+                    whitelistStatus = "Approved",
+                    message = "Auto Login สำเร็จ ตรวจสอบ Whitelist ล่าสุดแล้ว"
+                });
+            }
+            catch (Exception ex)
+            {
+                // Network errors do not delete the saved token or start OAuth automatically.
+                await SendToPageAsync(new
+                {
+                    type = "discordStatus",
+                    status = "error",
+                    message = "ตรวจสอบเซสชันไม่ได้: " + ex.Message
+                });
+            }
+        }
+
+        private async Task RevokeSavedSessionAsync()
+        {
+            string? savedToken = SessionTokenStore.Load();
+            SessionTokenStore.Clear();
+            if (string.IsNullOrWhiteSpace(savedToken)) return;
+
+            try
+            {
+                using var request = new HttpRequestMessage(
+                    HttpMethod.Post,
+                    _backendBaseUrl + "/api/launcher/sessions/revoke");
+                request.Headers.Authorization =
+                    new AuthenticationHeaderValue("Bearer", savedToken);
+                request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+                using var response = await Http.SendAsync(request);
+                // The local token is cleared even if the backend is temporarily unavailable.
+            }
+            catch
+            {
+                // Local logout remains effective; the server token expires automatically.
             }
         }
 
