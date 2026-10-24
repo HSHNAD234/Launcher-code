@@ -1,13 +1,15 @@
-name: Build HSHONAD Launcher
+name: Build and Release HSHONAD Launcher
 
 on:
   push:
     branches:
       - main
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-windows:
@@ -22,15 +24,28 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Restore
-        run: dotnet restore ".\\HSHONAD Launcher.csproj"
+        run: dotnet restore ".\HSHONAD Launcher.csproj"
 
       - name: Publish Windows x64
-        run: dotnet publish ".\\HSHONAD Launcher.csproj" --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true --output ".\\publish"
+        run: dotnet publish ".\HSHONAD Launcher.csproj" --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true --output ".\publish"
 
-      - name: Upload Windows build
+      - name: Upload Windows build artifact
+        if: startsWith(github.ref, 'refs/heads/')
         uses: actions/upload-artifact@v4
         with:
           name: HSHONAD-Launcher-Windows-x64
           path: publish/
           if-no-files-found: error
           retention-days: 14
+
+      - name: Package updater release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: Compress-Archive -Path ".\publish\*" -DestinationPath ".\HSHONAD-Launcher-win-x64.zip" -Force
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: HSHONAD-Launcher-win-x64.zip
