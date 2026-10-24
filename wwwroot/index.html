@@ -475,6 +475,7 @@
                     </div>
                 </div>
                 <div class="top-actions">
+                    <button class="small-btn" id="proxyBtn">⇄ Proxy</button>
                     <button class="small-btn" id="settingsBtn">⚙ Settings</button>
                     <button class="small-btn" id="aboutBtn">About</button>
                 </div>
@@ -972,28 +973,52 @@ if (window.chrome?.webview) {
 showLogin();
     </script>
 
-    <section id="local-proxy-panel" style="position:fixed;right:18px;bottom:18px;z-index:9999;background:#171923;color:#fff;padding:14px;border:1px solid #454a5e;border-radius:12px;font:14px sans-serif;max-width:300px">
-      <strong>Local Proxy</strong>
-      <p id="local-proxy-status" style="margin:8px 0">สถานะ: ยังไม่เปิด</p>
-      <button id="local-proxy-start" type="button">เปิด Proxy</button>
-      <button id="local-proxy-stop" type="button">ปิด Proxy</button>
-    </section>
     <script>
       (() => {
-        const status = document.getElementById('local-proxy-status');
-        const start = document.getElementById('local-proxy-start');
-        const stop = document.getElementById('local-proxy-stop');
-        if (!window.chrome?.webview) {
-          status.textContent = 'ต้องเปิดผ่าน Launcher';
-          start.disabled = stop.disabled = true;
-          return;
-        }
-        start.addEventListener('click', () => window.chrome.webview.postMessage({ type: 'startProxy' }));
-        stop.addEventListener('click', () => window.chrome.webview.postMessage({ type: 'stopProxy' }));
-        window.chrome.webview.addEventListener('message', event => {
-          const data = event.data || {};
-          if (data.type === 'proxyStatus') status.textContent = 'สถานะ: ' + (data.message || data.status);
+        const proxyButton = document.getElementById('proxyBtn');
+
+        proxyButton.addEventListener('click', () => {
+          openPopup('Local Proxy', `
+            <div class="auth">
+              <p class="auth-copy">
+                เปิด Proxy เฉพาะเมื่อต้องการใช้งาน สามารถปิดได้จากหน้านี้
+              </p>
+              <p id="local-proxy-status" class="state">สถานะ: ยังไม่ทราบ</p>
+              <button class="primary" id="local-proxy-start" type="button">เปิด Proxy</button>
+              <button class="secondary" id="local-proxy-stop" type="button">ปิด Proxy</button>
+            </div>
+          `);
+
+          const status = document.getElementById('local-proxy-status');
+          const start = document.getElementById('local-proxy-start');
+          const stop = document.getElementById('local-proxy-stop');
+
+          if (!window.chrome?.webview) {
+            status.textContent = 'ต้องเปิดผ่าน Launcher';
+            start.disabled = stop.disabled = true;
+            return;
+          }
+
+          start.addEventListener('click', () => {
+            status.textContent = 'กำลังเปิด Proxy...';
+            window.chrome.webview.postMessage({ type: 'startProxy' });
+          });
+
+          stop.addEventListener('click', () => {
+            status.textContent = 'กำลังปิด Proxy...';
+            window.chrome.webview.postMessage({ type: 'stopProxy' });
+          });
         });
+
+        if (window.chrome?.webview) {
+          window.chrome.webview.addEventListener('message', event => {
+            const data = event.data || {};
+            if (data.type !== 'proxyStatus') return;
+
+            const status = document.getElementById('local-proxy-status');
+            if (status) status.textContent = 'สถานะ: ' + (data.message || data.status);
+          });
+        }
       })();
     </script>
 
