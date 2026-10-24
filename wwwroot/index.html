@@ -505,6 +505,8 @@
                     <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
                     <p id="updateDetail">ยังไม่ได้เชื่อมต่อ Patch API</p>
                     <button class="primary" id="checkUpdateBtn">Check Update</button>
+                    <button class="secondary" id="launchGameBtn">Launch Game</button>
+                    <p id="gamePathCaption" style="font-size:12px;color:var(--muted);overflow-wrap:anywhere">ยังไม่ได้เลือกไฟล์เกม</p>
                 </div>
             </section>
 
@@ -561,7 +563,7 @@ function closePopup() {
 }
 
 function apiBase() {
-  return (localStorage.getItem(API_KEY) || '')
+  return (localStorage.getItem(API_KEY) || 'https://hshonad-backend.onrender.com')
     .trim().replace(/\/$/, '');
 }
 
@@ -849,16 +851,30 @@ $('settingsBtn').onclick = () => {
   openPopup('Settings', `
     <label for="apiInput">Launcher API URL</label>
     <input class="field" id="apiInput"
-      placeholder="http://localhost:3000"
+      placeholder="https://hshonad-backend.onrender.com"
       value="${escapeHTML(apiBase())}">
     <button class="primary" id="saveApi">บันทึก API URL</button>
+    <div style="height:18px"></div>
+    <label for="proxyHostsInput">HSHONAD Proxy — Allowed Hosts</label>
+    <p class="auth-copy" style="margin:6px 0 10px;text-align:left">
+      ใส่เฉพาะ Host ที่ HSHONAD มีสิทธิ์จัดการ หนึ่งรายการต่อบรรทัด เช่น api.your-domain.example หรือ *.your-domain.example
+      Proxy จะไม่ยอมรับปลายทางที่ไม่อยู่ในรายการ และจะทำงานเฉพาะขณะเกมที่เลือกกำลังเปิดอยู่
+    </p>
+    <textarea class="field" id="proxyHostsInput" rows="4" style="width:100%;resize:vertical" placeholder="api.your-domain.example\n*.your-domain.example">${escapeHTML(window.proxyAllowedHosts || '')}</textarea>
+    <button class="primary" id="saveProxyHosts" style="margin-top:10px">บันทึก Proxy Hosts</button>
   `);
 
   $('saveApi').onclick = () => {
     const value = $('apiInput').value.trim().replace(/\/$/, '');
+    if (value && !/^https?:\/\//i.test(value)) return toast('API URL ต้องขึ้นต้นด้วย http:// หรือ https://');
     localStorage.setItem(API_KEY, value);
-    closePopup();
     toast('บันทึก API URL แล้ว');
+  };
+
+  $('saveProxyHosts').onclick = () => {
+    const hosts = $('proxyHostsInput').value;
+    if (!window.chrome?.webview) return toast('การบันทึก Proxy Hosts ต้องเปิดผ่าน HSHONAD Launcher');
+    window.chrome.webview.postMessage({ type: 'saveProxyHosts', hosts });
   };
 };
 
@@ -895,6 +911,55 @@ $('logoutBtn').onclick = () => {
   showLogin();
 };
 
+function renderGameSelection() {
+  openPopup('Select Game', `
+    <div class="auth">
+      <p class="auth-copy">เลือกไฟล์ executable (.exe) ของเกมในเครื่องนี้</p>
+      <div class="news" style="text-align:left;overflow-wrap:anywhere">
+        <strong>ตำแหน่งเกม</strong>
+        <div id="gameFolderPath" style="margin-top:8px">${escapeHTML(window.gameExecutablePath || 'ยังไม่ได้เลือกไฟล์เกม')}</div>
+      </div>
+      <button class="primary" id="chooseGameFile" style="margin-top:14px">เลือกไฟล์เกม (.exe)</button>
+      <button class="secondary" id="scanGameFile">ตรวจสอบเบื้องต้น</button>
+      <p class="auth-copy" id="gameFolderMessage" aria-live="polite"></p>
+    </div>
+  `);
+  $('chooseGameFile').onclick = () => {
+    if (!window.chrome?.webview) return toast('ต้องเปิดผ่าน HSHONAD Launcher บน Windows');
+    window.chrome.webview.postMessage({ type: 'selectGame' });
+  };
+  $('scanGameFile').onclick = () => {
+    if (!window.chrome?.webview) return toast('ต้องเปิดผ่าน HSHONAD Launcher บน Windows');
+    window.chrome.webview.postMessage({ type: 'scanGame' });
+  };
+}
+
+function renderFixPopup() {
+  openPopup('Fix Game — Read-only check', `
+    <div class="auth">
+      <p class="auth-copy">
+        ตรวจสอบไฟล์เกมที่เลือกแบบอ่านอย่างเดียวก่อน ยังไม่ลบ เขียนทับ หรือดาวน์โหลดไฟล์ใด ๆ
+        การซ่อมจริงจะเปิดใช้เมื่อมี Manifest และ SHA-256 ที่เชื่อถือได้
+      </p>
+      <div class="news" id="fixScanResult" style="text-align:left;white-space:pre-wrap;overflow-wrap:anywhere" aria-live="polite">
+        ${escapeHTML(window.gameScanSummary || 'กดปุ่มเพื่อตรวจสอบไฟล์เกม')}
+      </div>
+      <button class="primary" id="runGameScan" style="margin-top:14px">ตรวจสอบไฟล์เกม</button>
+    </div>
+  `);
+  $('runGameScan').onclick = () => {
+    if (!window.chrome?.webview) return toast('ต้องเปิดผ่าน HSHONAD Launcher บน Windows');
+    $('runGameScan').disabled = true;
+    $('fixScanResult').textContent = 'กำลังตรวจสอบ...';
+    window.chrome.webview.postMessage({ type: 'scanGame' });
+  };
+}
+
+$('launchGameBtn').onclick = () => {
+  if (!window.chrome?.webview) return toast('เปิดเกมผ่าน HSHONAD Launcher บน Windows');
+  window.chrome.webview.postMessage({ type: 'launchGame' });
+};
+
 document.querySelectorAll('[data-page]').forEach(button => {
   button.onclick = () => {
     document.querySelectorAll('[data-page]').forEach(item =>
@@ -902,21 +967,13 @@ document.querySelectorAll('[data-page]').forEach(button => {
     );
 
     const page = button.dataset.page;
-
     if (page === 'start') {
+      closePopup();
       toast('หน้าแรกของ Launcher');
     } else if (page === 'select') {
-      openPopup('Select Game', `
-        <p class="auth-copy">
-          ต้องเชื่อมกับ Windows host เพื่อเลือกไฟล์เกมในเครื่อง
-        </p>
-      `);
+      renderGameSelection();
     } else if (page === 'fix') {
-      openPopup('Fix Game', `
-        <p class="auth-copy">
-          ระบบซ่อมเกมต้องเชื่อมกับตัวตรวจสอบไฟล์ที่ได้รับอนุญาต
-        </p>
-      `);
+      renderFixPopup();
     }
   };
 });
@@ -965,16 +1022,56 @@ if (window.chrome?.webview) {
     if (data.type === 'launcherStatus' && data.message) {
       toast(data.message);
     }
+
+    if (data.type === 'gameFolderStatus') {
+      window.gameExecutablePath = data.path || '';
+      const pathLabel = $('gameFolderPath');
+      const caption = $('gamePathCaption');
+      const message = $('gameFolderMessage');
+      if (pathLabel) pathLabel.textContent = window.gameExecutablePath || 'ยังไม่ได้เลือกไฟล์เกม';
+      if (caption) caption.textContent = window.gameExecutablePath || 'ยังไม่ได้เลือกไฟล์เกม';
+      if (message) message.textContent = data.message || '';
+      if (data.status === 'error') toast(data.message || 'จัดการตำแหน่งเกมไม่สำเร็จ');
+    }
+
+    if (data.type === 'gameScanStatus') {
+      window.gameScanSummary = data.summary || data.message || '';
+      const result = $('fixScanResult');
+      if (result) result.textContent = window.gameScanSummary;
+      const button = $('runGameScan');
+      if (button) button.disabled = false;
+      const message = $('gameFolderMessage');
+      if (message) message.textContent = data.message || '';
+      if (data.status === 'error') toast(data.message || 'ตรวจสอบเกมไม่สำเร็จ');
+    }
+
+    if (data.type === 'gameStatus') {
+      const indicator = $('launcher-mode-status');
+      if (indicator) indicator.textContent = data.lowPower
+        ? 'สถานะ Launcher: Low Power Mode (กำลังเล่นเกม)'
+        : 'สถานะ Launcher: โหมดปกติ';
+      $('connection').textContent = data.running ? 'IN GAME' : 'Launcher Ready';
+      if (data.message) toast(data.message);
+    }
+
+    if (data.type === 'proxyAllowlist') {
+      window.proxyAllowedHosts = data.hosts || '';
+      const field = $('proxyHostsInput');
+      if (field) field.value = window.proxyAllowedHosts;
+      if (data.message) toast(data.message);
+    }
   });
 }
 
-// เปิด Login Popup เป็นหน้าแรก
-showLogin();
+// ไม่เปิด Login popup อัตโนมัติ เพื่อให้ผู้ใช้เข้า Select Game / Fix ได้ทันที
+
     </script>
 
     <section id="local-proxy-panel" style="position:fixed;right:18px;bottom:18px;z-index:9999;background:#171923;color:#fff;padding:14px;border:1px solid #454a5e;border-radius:12px;font:14px sans-serif;max-width:300px">
-      <strong>Local Proxy</strong>
+      <strong>HSHONAD Proxy</strong>
       <p id="local-proxy-status" style="margin:8px 0">สถานะ: ยังไม่เปิด</p>
+      <p id="launcher-mode-status" style="margin:8px 0;font-size:12px;color:#d8b57a">สถานะ Launcher: โหมดปกติ</p>
+      <p style="font-size:11px;line-height:1.5;color:#bdb9b2">Proxy เป็น HTTPS CONNECT listener ที่ 127.0.0.1:8888 ใช้ได้กับโปรแกรมที่ตั้งค่าให้ใช้ Proxy นี้เท่านั้น</p>
       <button id="local-proxy-start" type="button">เปิด Proxy</button>
       <button id="local-proxy-stop" type="button">ปิด Proxy</button>
     </section>
