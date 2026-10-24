@@ -532,6 +532,7 @@
 const $ = id => document.getElementById(id);
 const API_KEY = 'hshApiBase';
 const DISMISSED_KEY = 'hshDismissedUpdateVersion';
+window.autoOpenAtGameStart = false;
 
 function toast(message) {
   const el = $('toast');
@@ -856,6 +857,19 @@ $('settingsBtn').onclick = () => {
       placeholder="https://hshonad-backend.onrender.com"
       value="${escapeHTML(apiBase())}">
     <button class="primary" id="saveApi">บันทึก API URL</button>
+
+    <div style="height:18px"></div>
+    <label for="autoOpenAtGameStart" style="display:flex;align-items:center;gap:10px;cursor:pointer">
+      <input id="autoOpenAtGameStart" type="checkbox"
+        style="width:18px;height:18px;accent-color:var(--gold)"
+        ${window.autoOpenAtGameStart ? 'checked' : ''}>
+      <span>เปิด Launcher อัตโนมัติเมื่อเริ่มเกม</span>
+    </label>
+    <p class="auth-copy" style="margin:6px 0 10px;text-align:left">
+      เมื่อเปิดใช้งาน Launcher จะเริ่มทำงานเบื้องหลังตอนเข้า Windows และแสดงหน้าต่างเมื่อพบเกมที่เลือกกำลังเปิดอยู่ ปิดหน้าต่างจะย่อไปที่ System Tray
+    </p>
+    <button class="primary" id="saveAutoOpenAtGameStart">บันทึกการเปิดอัตโนมัติ</button>
+
     <div style="height:18px"></div>
     <label for="hostsRegistryUrlInput">Hosts Registry Web URL</label>
     <p class="auth-copy" style="margin:6px 0 10px;text-align:left">
@@ -905,6 +919,15 @@ $('settingsBtn').onclick = () => {
     const hosts = $('proxyHostsInput').value;
     if (!window.chrome?.webview) return toast('การบันทึก Proxy Hosts ต้องเปิดผ่าน HSHONAD Launcher');
     window.chrome.webview.postMessage({ type: 'saveProxyHosts', hosts });
+  };
+
+  $('saveAutoOpenAtGameStart').onclick = () => {
+    const enabled = $('autoOpenAtGameStart').checked;
+    if (!window.chrome?.webview) return toast('การตั้งค่านี้ต้องเปิดผ่าน HSHONAD Launcher');
+    window.chrome.webview.postMessage({
+      type: 'setAutoOpenAtGameStart',
+      enabled
+    });
   };
 };
 
@@ -1191,6 +1214,16 @@ if (window.chrome?.webview) {
 
     if (data.type === 'backendUrlStatus' && data.message) {
       toast(data.message);
+    }
+
+    if (data.type === 'autoOpenAtGameStart' ||
+        data.type === 'autoOpenAtGameStartStatus') {
+      if (typeof data.enabled === 'boolean') {
+        window.autoOpenAtGameStart = data.enabled;
+        const checkbox = $('autoOpenAtGameStart');
+        if (checkbox) checkbox.checked = data.enabled;
+      }
+      if (data.message) toast(data.message);
     }
   });
 }
