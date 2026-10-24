@@ -401,6 +401,16 @@ namespace HSHONAD_Launcher
 
         private void SelectGameExecutable()
         {
+            if (IsSelectedGameRunning())
+            {
+                MessageBox.Show(
+                    "กรุณาปิดเกมก่อนเปลี่ยนไฟล์เกมที่ Launcher ติดตาม",
+                    "HSHONAD Launcher",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
             using var dialog = new OpenFileDialog
             {
                 Title = "เลือกไฟล์เกม",
