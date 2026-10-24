@@ -138,12 +138,33 @@ namespace HSHONAD_Launcher
             }
             catch (Exception ex)
             {
-                await SendToPageAsync(new
+                string actionType = "";
+                try
                 {
-                    type = "discordStatus",
-                    status = "error",
-                    message = "ดำเนินการไม่สำเร็จ: " + ex.Message
-                });
+                    using var errorDoc = JsonDocument.Parse(e.WebMessageAsJson);
+                    if (errorDoc.RootElement.TryGetProperty("type", out var actionTypeElement))
+                        actionType = actionTypeElement.GetString() ?? "";
+                }
+                catch { }
+
+                if (actionType == "installLauncherUpdate")
+                {
+                    await SendToPageAsync(new
+                    {
+                        type = "launcherUpdateStatus",
+                        status = "error",
+                        message = "เริ่มอัปเดตไม่สำเร็จ: " + ex.Message
+                    });
+                }
+                else
+                {
+                    await SendToPageAsync(new
+                    {
+                        type = "discordStatus",
+                        status = "error",
+                        message = "ดำเนินการไม่สำเร็จ: " + ex.Message
+                    });
+                }
             }
         }
 
