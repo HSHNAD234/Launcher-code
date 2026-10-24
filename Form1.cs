@@ -32,6 +32,7 @@ namespace HSHONAD_Launcher
             new System.Windows.Forms.Timer { Interval = 2500 };
         private bool _lastGameRunning;
         private bool _monitorTickBusy;
+        private bool _isAuthApproved;
         private bool _lowPowerActive;
         private ProcessPriorityClass? _originalPriority;
 
@@ -134,6 +135,7 @@ namespace HSHONAD_Launcher
                         break;
 
                     case "logout":
+                        _isAuthApproved = false;
                         _loginCts?.Cancel();
                         await SendToPageAsync(new
                         {
@@ -190,6 +192,7 @@ namespace HSHONAD_Launcher
 
         private async Task StartDiscordLoginAsync(CancellationToken token)
         {
+            _isAuthApproved = false;
             await SendToPageAsync(new
             {
                 type = "discordStatus",
@@ -271,6 +274,7 @@ namespace HSHONAD_Launcher
 
                     if (status == "approved")
                     {
+                        _isAuthApproved = true;
                         await SendToPageAsync(new
                         {
                             type = "discordStatus",
@@ -286,6 +290,7 @@ namespace HSHONAD_Launcher
 
                     if (status == "denied")
                     {
+                        _isAuthApproved = false;
                         await SendToPageAsync(new
                         {
                             type = "discordStatus",
@@ -298,6 +303,7 @@ namespace HSHONAD_Launcher
 
                     if (status == "expired" || status == "error")
                     {
+                        _isAuthApproved = false;
                         await SendToPageAsync(new
                         {
                             type = "discordStatus",
@@ -531,6 +537,16 @@ namespace HSHONAD_Launcher
 
         private async Task LaunchGameAsync()
         {
+            if (!_isAuthApproved)
+            {
+                await SendToPageAsync(new
+                {
+                    type = "launcherStatus",
+                    message = "กรุณา Login และยืนยันสิทธิ์ Whitelist ก่อนเปิดเกม"
+                });
+                return;
+            }
+
             string? exePath = _gameExecutablePath ?? LoadSavedGamePath();
             if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
             {
@@ -555,6 +571,11 @@ namespace HSHONAD_Launcher
                     return;
                 }
 
+                // Bring the listener up before launch, when configured, so a
+                // client explicitly using 127.0.0.1:8888 can connect immediately.
+                if (LoadProxyAllowedHosts().Count > 0)
+                    await StartProxyAsync(requireGameRunning: false);
+
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = exePath,
@@ -573,6 +594,9 @@ namespace HSHONAD_Launcher
             }
             catch (Exception ex)
             {
+                if (_proxy?.IsRunning == true)
+                    await StopProxyAsync();
+
                 await SendToPageAsync(new
                 {
                     type = "launcherStatus",
@@ -797,7 +821,7 @@ namespace HSHONAD_Launcher
             }
         }
 
-        private async Task StartProxyAsync()
+        private async Task StartProxyAsync(bool requireGameRunning = true)
         {
             try
             {
@@ -808,10 +832,10 @@ namespace HSHONAD_Launcher
                     return;
                 }
 
-                if (!IsSelectedGameRunning())
+                if (requireGameRunning && !IsSelectedGameRunning())
                 {
                     await SendProxyStatusAsync(
-                        "stopped", "Proxy จะเปิดเฉพาะระหว่างตรวจพบเกมที่เลือกกำลังทำงาน");
+                        "stopped", "Proxy จะเปิดเฉพาะระหว่างเปิดเกม หรือกำลังเริ่มเกมจาก Launcher");
                     return;
                 }
 
