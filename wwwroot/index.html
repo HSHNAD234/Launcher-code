@@ -530,6 +530,12 @@
 
     <script>
 const $ = id => document.getElementById(id);
+
+window.addEventListener('DOMContentLoaded', () => {
+  if (window.chrome?.webview) {
+    window.chrome.webview.postMessage({ type: 'launcherReady' });
+  }
+});
 const API_KEY = 'hshApiBase';
 const DISMISSED_KEY = 'hshDismissedUpdateVersion';
 window.autoOpenAtGameStart = false;
