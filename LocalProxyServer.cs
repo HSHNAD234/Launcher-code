@@ -125,6 +125,7 @@ namespace HSHONAD_Launcher
                             "tcp://" + authority,
                             UriKind.Absolute,
                             out Uri? target) ||
+                        target is null ||
                         string.IsNullOrWhiteSpace(target.Host) ||
                         target.Port != 443 ||
                         !IsHostAllowed(target.Host))
