@@ -20,6 +20,9 @@ namespace HSHONAD_Launcher
         private const string DefaultBackendBaseUrl =
             "https://hshonad-backend.onrender.com";
 
+        private const string DefaultHostsRegistryBaseUrl =
+            "https://web-1-um98.onrender.com";
+
         private string BackendBaseUrl => LoadBackendBaseUrl();
 
         private static readonly HttpClient Http =
@@ -419,7 +422,7 @@ namespace HSHONAD_Launcher
             try
             {
                 if (!File.Exists(HostsRegistryUrlFile))
-                    return "";
+                    return DefaultHostsRegistryBaseUrl;
 
                 string value = File.ReadAllText(HostsRegistryUrlFile).Trim().TrimEnd('/');
                 if (Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
@@ -452,15 +455,8 @@ namespace HSHONAD_Launcher
             try
             {
                 Directory.CreateDirectory(UserDataDirectory);
-                if (value.Length == 0)
-                {
-                    if (File.Exists(HostsRegistryUrlFile))
-                        File.Delete(HostsRegistryUrlFile);
-                }
-                else
-                {
-                    File.WriteAllText(HostsRegistryUrlFile, value);
-                }
+                // Keep an empty file as an explicit opt-out; a missing file uses the default web registry.
+                File.WriteAllText(HostsRegistryUrlFile, value);
 
                 await SendToPageAsync(new
                 {
