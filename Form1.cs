@@ -518,10 +518,17 @@ namespace HSHONAD_Launcher
             if (running)
             {
                 EnableLowPowerMode();
+
+                // Start the local proxy only when a game process is detected and
+                // the user has explicitly configured allowed destination hosts.
+                if (_proxy?.IsRunning != true && LoadProxyAllowedHosts().Count > 0)
+                    await StartProxyAsync();
+
                 await SendToPageAsync(new
                 {
                     type = "gameStatus",
                     status = "running",
+                    running = true,
                     lowPower = true,
                     gamePath = _gameExecutablePath ?? "",
                     message = "ตรวจพบเกมกำลังทำงาน: เปิด Low Power Mode ให้ Launcher"
@@ -538,6 +545,7 @@ namespace HSHONAD_Launcher
                 {
                     type = "gameStatus",
                     status = "stopped",
+                    running = false,
                     lowPower = false,
                     gamePath = _gameExecutablePath ?? "",
                     message = "เกมไม่ได้ทำงาน: ปิด Proxy อัตโนมัติและคืนโหมดปกติ"
@@ -645,7 +653,7 @@ namespace HSHONAD_Launcher
         {
             try
             {
-                var hosts = input.Split(new[] { '\\r', '\\n', ',', ';' },
+                var hosts = input.Split(new[] { '\r', '\n', ',', ';' },
                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     .Select(host => host.ToLowerInvariant())
                     .Distinct(StringComparer.OrdinalIgnoreCase)
