@@ -30,3 +30,17 @@ Open `HSHONAD Launcher.csproj` in Visual Studio on Windows with the .NET 10 Wind
 8. Check login and manifest checking still work with the HSHONAD Backend API.
 
 Build and runtime testing must be done in Visual Studio on Windows; the GitHub branch itself is not proof that the project has been built or run successfully.
+
+
+## Hosts Registry Web Database
+
+The hosts-control-web/ directory provides a separate admin website backed by PostgreSQL. It stores the four fixed domain names, an enabled flag, purpose text, notes, and an audit history. It is a registry/configuration database, not a tool for redirecting hostnames to arbitrary IPs.
+
+To publish it:
+1. Open Render and create a Blueprint from hosts-control-web/render.yaml.
+2. Supply DATABASE_URL using a persistent PostgreSQL database connection string. Set DATABASE_SSL=true if the provider requires TLS. Keep the URL private.
+3. Render generates ADMIN_TOKEN; read its value from the service Environment page and use it for admin login.
+4. Once deployed, open the service HTTPS URL and manage the registry.
+5. In Launcher Settings, set Hosts Registry Web URL to the service root URL. In Fix, click Load Registry from Web DB to read and display the registry. This request is read-only and does not change Windows Hosts.
+
+The web service has a public read-only GET /api/hosts-config endpoint. All record changes require the admin session. Database credentials and ADMIN_TOKEN must never be committed. The Blueprint does not create a billable database automatically; configure a persistent PostgreSQL provider yourself. Render's free Postgres expires after 30 days, so it is not suitable for long-lived settings: https://render.com/docs/free.
