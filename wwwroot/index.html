@@ -866,9 +866,17 @@ $('settingsBtn').onclick = () => {
 
   $('saveApi').onclick = () => {
     const value = $('apiInput').value.trim().replace(/\/$/, '');
-    if (value && !/^https?:\/\//i.test(value)) return toast('API URL ต้องขึ้นต้นด้วย http:// หรือ https://');
+    if (!value || (!/^https:\/\//i.test(value) &&
+        !/^http:\/\/localhost(?::\d+)?$/i.test(value) &&
+        !/^http:\/\/127\.0\.0\.1(?::\d+)?$/i.test(value))) {
+      return toast('ใช้ HTTPS เท่านั้น ยกเว้น localhost สำหรับทดสอบ');
+    }
     localStorage.setItem(API_KEY, value);
-    toast('บันทึก API URL แล้ว');
+    if (window.chrome?.webview) {
+      window.chrome.webview.postMessage({ type: 'saveBackendUrl', url: value });
+    } else {
+      toast('บันทึก API URL ในเบราว์เซอร์แล้ว');
+    }
   };
 
   $('saveProxyHosts').onclick = () => {
@@ -1059,6 +1067,17 @@ if (window.chrome?.webview) {
       const field = $('proxyHostsInput');
       if (field) field.value = window.proxyAllowedHosts;
       if (data.message) toast(data.message);
+    }
+
+    if (data.type === 'backendUrl') {
+      if (data.url) localStorage.setItem(API_KEY, data.url);
+      const apiInput = $('apiInput');
+      if (apiInput && data.url) apiInput.value = data.url;
+      if (data.message) toast(data.message);
+    }
+
+    if (data.type === 'backendUrlStatus' && data.message) {
+      toast(data.message);
     }
   });
 }
