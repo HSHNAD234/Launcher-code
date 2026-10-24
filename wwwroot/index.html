@@ -1,0 +1,1001 @@
+
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>HSH Launcher</title>
+
+    <style>
+        :root {
+            --gold: #d8b57a;
+            --text: #f5f1e9;
+            --muted: #bdb9b2;
+            --line: #ffffff20;
+            --panel: rgba(18,18,20,.82);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            color: var(--text);
+            font-family: "Segoe UI", Tahoma, sans-serif;
+            background: #111 url("https://raw.githubusercontent.com/HSHNAD234/background/refs/heads/main/Belle%20BG.png") center/cover fixed no-repeat;
+        }
+
+        button {
+            font: inherit;
+            cursor: pointer;
+        }
+
+            button:disabled {
+                opacity: .5;
+                cursor: not-allowed;
+            }
+
+        .app {
+            min-height: 100vh;
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            transition: filter .25s;
+        }
+
+        body.modal-open {
+            overflow: hidden;
+        }
+
+            body.modal-open .app {
+                filter: blur(7px) brightness(.4);
+                pointer-events: none;
+            }
+
+        .sidebar {
+            background: rgba(15,15,17,.85);
+            border-right: 1px solid var(--line);
+            padding: 24px 18px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo {
+            width: 100%;
+            height: 130px;
+            object-fit: contain;
+            margin-bottom: 25px;
+        }
+
+        .nav {
+            display: grid;
+            gap: 10px;
+        }
+
+            .nav button, .small-btn {
+                border: 1px solid var(--line);
+                background: #ffffff08;
+                color: var(--text);
+                padding: 14px;
+                border-radius: 9px;
+                text-align: left;
+            }
+
+                .nav button:hover, .nav button.active {
+                    border-color: #d8b57a88;
+                    background: #d8b57a20;
+                }
+
+        .side-bottom {
+            margin-top: auto;
+            padding-top: 25px;
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 2;
+        }
+
+            .side-bottom strong {
+                display: block;
+                color: var(--text);
+                overflow-wrap: anywhere;
+            }
+
+        .main {
+            min-width: 0;
+            padding: 28px clamp(16px,3vw,44px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .eyebrow {
+            font-size: 11px;
+            color: var(--gold);
+            letter-spacing: .22em;
+        }
+
+        .top-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .hero {
+            flex: 1;
+            min-height: 300px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        .hero-mark {
+            font-size: clamp(55px,9vw,110px);
+            font-weight: 900;
+            letter-spacing: .1em;
+            text-shadow: 0 10px 40px #000;
+        }
+
+        .hero-sub {
+            letter-spacing: .25em;
+            font-size: 12px;
+            margin-top: 15px;
+        }
+
+        .hero-line {
+            margin-top: 24px;
+            height: 2px;
+            width: 70px;
+            background: var(--gold);
+        }
+
+        .panels {
+            display: grid;
+            grid-template-columns: 1fr 1.3fr;
+            gap: 16px;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 20px;
+            backdrop-filter: blur(15px);
+        }
+
+            .panel h3 {
+                margin-top: 0;
+            }
+
+            .panel p {
+                font-size: 13px;
+                color: var(--muted);
+                line-height: 1.8;
+            }
+
+        .tag {
+            color: var(--gold);
+            font-size: 11px;
+        }
+
+        .primary {
+            width: 100%;
+            padding: 14px;
+            border: 0;
+            border-radius: 9px;
+            background: var(--gold);
+            color: #17130d;
+            font-weight: 800;
+        }
+
+            .primary:hover {
+                filter: brightness(1.1);
+            }
+
+        .secondary {
+            width: 100%;
+            margin-top: 9px;
+            padding: 12px;
+            background: #ffffff08;
+            color: var(--text);
+            border: 1px solid var(--line);
+            border-radius: 9px;
+        }
+
+        .update-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--muted);
+            margin: 18px 0 8px;
+        }
+
+        .progress {
+            height: 7px;
+            border-radius: 99px;
+            background: #ffffff18;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0;
+            background: var(--gold);
+            transition: width .3s;
+        }
+
+        .news {
+            margin-top: 16px;
+            padding: 14px;
+            border: 1px solid var(--line);
+            border-radius: 9px;
+            background: #0007;
+            font-size: 12px;
+        }
+
+        .toast {
+            display: none;
+            position: fixed;
+            z-index: 30;
+            top: 18px;
+            right: 18px;
+            max-width: 360px;
+            padding: 14px;
+            background: #1b1b1e;
+            border: 1px solid #d8b57a88;
+            border-radius: 10px;
+            font-size: 13px;
+        }
+
+            .toast.show {
+                display: block;
+            }
+
+        /* Popup */
+        .backdrop {
+            position: fixed;
+            z-index: 20;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+            background: #0009;
+            backdrop-filter: blur(9px);
+        }
+
+            .backdrop.open {
+                display: flex;
+            }
+
+        .modal {
+            width: min(820px, 100%);
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: clamp(24px,5vw,55px);
+            background: rgba(20,20,23,.97);
+            border: 1px solid #d8b57a55;
+            border-radius: 18px;
+            box-shadow: 0 25px 100px #000b;
+        }
+
+        .modal-title {
+            margin: 0 0 25px;
+            text-align: center;
+            font-size: clamp(24px,3vw,38px);
+        }
+
+        .auth {
+            max-width: 570px;
+            margin: auto;
+            text-align: center;
+        }
+
+        .auth-logo {
+            width: 90px;
+            height: 90px;
+            object-fit: contain;
+        }
+
+        .auth-copy {
+            max-width: 500px;
+            margin: 12px auto 26px;
+            color: var(--muted);
+            line-height: 1.9;
+            font-size: 14px;
+        }
+
+        .discord-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            min-height: 64px;
+            font-size: 19px;
+        }
+
+        .discord-mark {
+            display: inline-grid;
+            place-items: center;
+            width: 30px;
+            height: 30px;
+            border-radius: 8px;
+            background: #5865f2;
+            color: white;
+        }
+
+        .profile-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            text-align: left;
+            padding: 18px;
+            margin: 22px 0;
+            background: #ffffff08;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+        }
+
+        .avatar {
+            width: 68px;
+            height: 68px;
+            object-fit: cover;
+            border-radius: 50%;
+            background: #303036;
+        }
+
+        .profile-name {
+            font-weight: 800;
+            overflow-wrap: anywhere;
+        }
+
+        .profile-id, .muted {
+            margin-top: 6px;
+            color: var(--muted);
+            font-size: 12px;
+            overflow-wrap: anywhere;
+        }
+
+        .state {
+            display: inline-block;
+            padding: 7px 11px;
+            border: 1px solid #d8b57a55;
+            border-radius: 99px;
+            color: var(--gold);
+            font-size: 12px;
+        }
+
+        .modal-progress {
+            height: 8px;
+            margin: 22px 0 12px;
+            background: #ffffff18;
+            border-radius: 99px;
+            overflow: hidden;
+        }
+
+            .modal-progress div {
+                height: 100%;
+                width: 0;
+                background: var(--gold);
+                transition: width .3s;
+            }
+
+        .dismiss {
+            width: 100%;
+            margin-top: 12px;
+            padding: 13px;
+            background: #ffffff08;
+            color: var(--text);
+            border: 1px solid var(--line);
+            border-radius: 9px;
+        }
+
+        .field {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            color: white;
+            background: #111;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+        }
+
+        @media(max-width:850px) {
+            .app {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                padding: 12px;
+            }
+
+            .logo {
+                height: 75px;
+                margin: 0 0 10px;
+            }
+
+            .nav {
+                grid-template-columns: repeat(3,1fr);
+            }
+
+                .nav button {
+                    text-align: center;
+                    padding: 10px 4px;
+                }
+
+            .side-bottom {
+                margin-top: 15px;
+            }
+
+            .panels {
+                grid-template-columns: 1fr;
+            }
+
+            .hero {
+                min-height: 220px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app">
+        <aside class="sidebar">
+            <img class="logo"
+                 src="https://raw.githubusercontent.com/HSHNAD234/background/refs/heads/main/Logo.png"
+                 alt="HSH Logo">
+
+            <nav class="nav">
+                <button class="active" data-page="start">▶ Start</button>
+                <button data-page="select">▦ Select Game</button>
+                <button data-page="fix">✧ Fix</button>
+            </nav>
+
+            <div class="side-bottom">
+                Connection: <strong id="connection">Launcher Ready</strong>
+                Steam ID: <strong id="steamId">Not connected</strong>
+                Discord ID: <strong id="discordId">Not connected</strong>
+                Whitelist: <strong id="whitelist">Not checked</strong>
+            </div>
+        </aside>
+
+        <main class="main">
+            <header class="topbar">
+                <div>
+                    <div class="eyebrow">HORROR • SURVIVAL • ONLINE</div>
+                    <div style="font-size:12px;margin-top:5px">
+                        HOME SWEET HOME ONLINE
+                    </div>
+                </div>
+                <div class="top-actions">
+                    <button class="small-btn" id="settingsBtn">⚙ Settings</button>
+                    <button class="small-btn" id="aboutBtn">About</button>
+                </div>
+            </header>
+
+            <section class="hero">
+                <div class="hero-mark">HSH<span style="color:var(--gold)">.</span></div>
+                <div class="hero-sub">HOME SWEET HOME ONLINE</div>
+                <div class="hero-line"></div>
+            </section>
+
+            <section class="panels">
+                <div class="panel">
+                    <h3>Account Login <span class="tag">DISCORD</span></h3>
+                    <p>เข้าสู่ระบบด้วย Discord เพื่อยืนยันตัวตนและตรวจสอบ Whitelist</p>
+                    <button class="primary" id="loginBtn">Login with Discord</button>
+                    <button class="secondary" id="accountBtn">Account Info</button>
+                    <button class="secondary" id="logoutBtn">Log out</button>
+                </div>
+
+                <div class="panel">
+                    <h3>Game Update <span class="tag" id="versionTag">VERSION —</span></h3>
+                    <p id="updateMessage">ตรวจสอบสถานะอัปเดตจากระบบ Launcher</p>
+                    <div class="update-meta">
+                        <span id="updateStatus">Waiting</span>
+                        <span id="progressText">0%</span>
+                    </div>
+                    <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
+                    <p id="updateDetail">ยังไม่ได้เชื่อมต่อ Patch API</p>
+                    <button class="primary" id="checkUpdateBtn">Check Update</button>
+                </div>
+            </section>
+
+            <div class="news">
+                <strong>NEWS & ANNOUNCEMENTS</strong>
+                <div id="newsText" style="color:var(--muted);margin-top:6px">
+                    ข่าวสารและประกาศจากเซิร์ฟเวอร์
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <div class="backdrop" id="backdrop">
+        <section class="modal" role="dialog" aria-modal="true">
+            <h1 class="modal-title" id="modalTitle">Login</h1>
+            <div id="modalBody"></div>
+        </section>
+    </div>
+
+    <script>
+const $ = id => document.getElementById(id);
+const API_KEY = 'hshApiBase';
+const DISMISSED_KEY = 'hshDismissedUpdateVersion';
+
+function toast(message) {
+  const el = $('toast');
+  el.textContent = message;
+  el.classList.add('show');
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(
+    () => el.classList.remove('show'), 4000
+  );
+}
+
+function escapeHTML(value) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;',
+    '"':'&quot;', "'":'&#39;'
+  })[char]);
+}
+
+function openPopup(title, html) {
+  $('modalTitle').textContent = title;
+  $('modalBody').innerHTML = html;
+  $('backdrop').classList.add('open');
+  document.body.classList.add('modal-open');
+}
+
+function closePopup() {
+  $('backdrop').classList.remove('open');
+  document.body.classList.remove('modal-open');
+}
+
+function apiBase() {
+  return (localStorage.getItem(API_KEY) || '')
+    .trim().replace(/\/$/, '');
+}
+
+function showLogin() {
+  openPopup('เข้าสู่ระบบ', `
+    <div class="auth">
+      <img class="auth-logo"
+        src="https://raw.githubusercontent.com/HSHNAD234/background/refs/heads/main/Logo.png"
+        alt="HSH Logo">
+      <h2>ยินดีต้อนรับกลับ</h2>
+      <p class="auth-copy">
+        เข้าสู่ระบบด้วย Discord เพื่อยืนยันบัญชี
+        และตรวจสอบ Whitelist ก่อนเข้าเล่นเกม
+      </p>
+      <button class="primary discord-btn" id="popupLogin">
+        <span class="discord-mark">D</span>
+        Login with Discord
+      </button>
+    </div>
+  `);
+
+  $('popupLogin').onclick = beginLogin;
+}
+
+function showProfile(profile = {}, loading = true) {
+  openPopup('Discord Profile', `
+    <div class="auth">
+      <div class="state">
+        ${loading ? '● กำลังเข้าสู่ระบบ' : '● ยืนยันตัวตนแล้ว'}
+      </div>
+
+      <div class="profile-row">
+        <img class="avatar" id="avatar"
+          src="${escapeHTML(profile.avatar || '')}" alt="Avatar">
+
+        <div>
+          <div class="profile-name">
+            ${escapeHTML(profile.username || 'กำลังโหลดโปรไฟล์ Discord...')}
+          </div>
+          <div class="profile-id">
+            Discord ID: ${escapeHTML(profile.discordId || 'กำลังรอข้อมูล')}
+          </div>
+          <div class="muted">
+            Whitelist: ${escapeHTML(profile.whitelistStatus || 'กำลังตรวจสอบ...')}
+          </div>
+        </div>
+      </div>
+
+      ${
+        loading
+          ? `<div class="modal-progress"><div style="width:45%"></div></div>
+             <p class="muted">กำลังยืนยันตัวตนและตรวจสอบ Whitelist...</p>`
+          : `<button class="primary" id="profileContinue">ไปยัง Game Update</button>`
+      }
+    </div>
+  `);
+
+  $('avatar')?.addEventListener('error', event => {
+    event.currentTarget.style.visibility = 'hidden';
+  });
+
+  if (!loading) {
+    $('profileContinue').onclick = () => showUpdate(profile);
+  }
+}
+
+async function beginLogin() {
+  showProfile({}, true);
+  $('connection').textContent = 'Authenticating...';
+
+  // WebView2 host สามารถเริ่มขั้นตอน Login ผ่าน C# ได้
+  if (window.chrome?.webview) {
+    window.chrome.webview.postMessage({
+      type: 'discordWhitelistLogin'
+    });
+    return;
+  }
+
+  const api = apiBase();
+
+  if (!api) {
+    showLogin();
+    toast('กรุณาตั้งค่า Backend API ใน Settings ก่อน');
+    return;
+  }
+
+  try {
+    const response = await fetch(api + '/api/launcher/device-sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+
+    const data = await response.json();
+
+    if (!data.device_session_id ||
+        !data.device_secret ||
+        !data.verification_url) {
+      throw new Error('ข้อมูลจาก Backend ไม่ครบ');
+    }
+
+    const popup = window.open(
+      data.verification_url, '_blank', 'noopener'
+    );
+
+    if (!popup) {
+      toast('หากหน้าต่าง Discord ไม่เปิด ให้ตรวจสอบการอนุญาต Popup');
+    }
+
+    await pollLogin(api, data.device_session_id, data.device_secret);
+
+  } catch (error) {
+    showLogin();
+    toast('Login ไม่สำเร็จ: ' + error.message);
+  }
+}
+
+async function pollLogin(api, sessionId, secret) {
+  for (let attempt = 0; attempt < 60; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    try {
+      const response = await fetch(
+        api + '/api/launcher/device-sessions/' +
+        encodeURIComponent(sessionId),
+        { headers: { Authorization: 'Bearer ' + secret } }
+      );
+
+      if (!response.ok) continue;
+
+      const data = await response.json();
+
+      if (data.status === 'approved') {
+        const profile = {
+          username: data.username || 'Discord User',
+          discordId: data.discord_user_id || '',
+          avatar: data.avatar_url || '',
+          whitelistStatus: 'Approved'
+        };
+
+        $('discordId').textContent = profile.discordId || 'Connected';
+        $('whitelist').textContent = 'Approved';
+        $('connection').textContent = 'Connected';
+
+        await showUpdate(profile);
+        return;
+      }
+
+      if (data.status === 'denied') {
+        $('whitelist').textContent = 'Not whitelisted';
+        showLogin();
+        toast('บัญชี Discord นี้ไม่มีสิทธิ์ Whitelist');
+        return;
+      }
+
+      if (data.status === 'expired' || data.status === 'error') {
+        showLogin();
+        toast('เซสชันหมดอายุหรือเกิดข้อผิดพลาด');
+        return;
+      }
+    } catch (_) {
+      // ลองใหม่ในรอบถัดไป
+    }
+  }
+
+  showLogin();
+  toast('หมดเวลารอ Login กรุณาลองใหม่');
+}
+
+async function showUpdate(profile = {}) {
+  openPopup('Game Update', `
+    <div class="auth">
+      <div class="state">● เข้าสู่ระบบแล้ว</div>
+      <h2 style="margin-top:20px">Game Update</h2>
+      <p class="auth-copy">
+        ตรวจสอบเวอร์ชันเกมและอัปเดตล่าสุดก่อนเข้าเล่น
+      </p>
+
+      <div class="modal-progress">
+        <div id="modalFill"></div>
+      </div>
+      <div class="muted" id="modalStatus">กำลังตรวจสอบอัปเดต...</div>
+
+      <button class="primary" id="modalCheck" style="margin-top:18px">
+        ตรวจสอบอัปเดตอีกครั้ง
+      </button>
+
+      <button class="dismiss" id="dismissUpdate">
+        ไม่ต้องแสดงจนกว่าจะมีอัปเดตใหม่
+      </button>
+    </div>
+  `);
+
+  $('modalCheck').onclick = () => checkManifest(true);
+  $('dismissUpdate').onclick = () => {
+    const version = window.currentVersion;
+
+    if (!version) {
+      toast('ต้องตรวจสอบเวอร์ชันก่อนจึงจะซ่อนได้');
+      return;
+    }
+
+    localStorage.setItem(DISMISSED_KEY, version);
+    closePopup();
+  };
+
+  await checkManifest(false);
+}
+
+async function checkManifest(manual) {
+  const api = apiBase();
+  const status = $('modalStatus');
+  const fill = $('modalFill');
+  const button = $('modalCheck');
+
+  if (!api) {
+    if (status) status.textContent = 'ยังไม่ได้ตั้งค่า Backend API';
+    toast('ตั้งค่า Backend API ใน Settings ก่อน');
+    return;
+  }
+
+  if (button) button.disabled = true;
+  if (status) status.textContent = 'กำลังตรวจสอบเวอร์ชัน...';
+  if (fill) fill.style.width = '25%';
+
+  try {
+    const response = await fetch(api + '/api/launcher/manifest');
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+
+    const data = await response.json();
+    const version = String(data.version || '').trim();
+
+    if (!version) throw new Error('Manifest ไม่มี version');
+
+    window.currentVersion = version;
+    $('versionTag').textContent = 'VERSION ' + version;
+
+    const dismissed = localStorage.getItem(DISMISSED_KEY);
+
+    if (dismissed && dismissed !== version) {
+      localStorage.removeItem(DISMISSED_KEY);
+    }
+
+    if (localStorage.getItem(DISMISSED_KEY) === version) {
+      closePopup();
+      return;
+    }
+
+    if (fill) fill.style.width = '100%';
+
+    if (status) {
+      status.textContent = data.update_available
+        ? 'พบอัปเดตใหม่: ' + version
+        : 'เกมเป็นเวอร์ชันล่าสุด (' + version + ')';
+    }
+
+    $('updateMessage').textContent =
+      data.message || 'ตรวจสอบ Manifest สำเร็จ';
+
+    $('updateStatus').textContent =
+      data.update_available ? 'Update available' : 'Up to date';
+
+    $('updateDetail').textContent =
+      data.update_available
+        ? 'มีเวอร์ชันใหม่ — ต้องเชื่อมระบบดาวน์โหลดแพตช์'
+        : 'ตรวจสอบเวอร์ชันสำเร็จ';
+
+    $('progressFill').style.width = '100%';
+    $('progressText').textContent = '100%';
+
+  } catch (error) {
+    if (fill) fill.style.width = '0%';
+    if (status) status.textContent = 'ตรวจสอบไม่สำเร็จ: ' + error.message;
+    if (manual) toast('ตรวจสอบอัปเดตไม่สำเร็จ');
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+$('loginBtn').onclick = showLogin;
+$('checkUpdateBtn').onclick = () => showUpdate();
+
+$('settingsBtn').onclick = () => {
+  openPopup('Settings', `
+    <label for="apiInput">Launcher API URL</label>
+    <input class="field" id="apiInput"
+      placeholder="http://localhost:3000"
+      value="${escapeHTML(apiBase())}">
+    <button class="primary" id="saveApi">บันทึก API URL</button>
+  `);
+
+  $('saveApi').onclick = () => {
+    const value = $('apiInput').value.trim().replace(/\/$/, '');
+    localStorage.setItem(API_KEY, value);
+    closePopup();
+    toast('บันทึก API URL แล้ว');
+  };
+};
+
+$('aboutBtn').onclick = () => {
+  openPopup('About HSH Launcher', `
+    <div class="auth">
+      <p class="auth-copy">
+        Home Sweet Home Online Launcher
+      </p>
+      <button class="primary" id="aboutClose">ปิด</button>
+    </div>
+  `);
+  $('aboutClose').onclick = closePopup;
+};
+
+$('accountBtn').onclick = () => {
+  openPopup('Account Info', `
+    <p>Steam ID: ${escapeHTML($('steamId').textContent)}</p>
+    <p>Discord ID: ${escapeHTML($('discordId').textContent)}</p>
+    <p>Whitelist: ${escapeHTML($('whitelist').textContent)}</p>
+    <button class="primary" id="accountClose">ปิด</button>
+  `);
+  $('accountClose').onclick = closePopup;
+};
+
+$('logoutBtn').onclick = () => {
+  if (window.chrome?.webview) {
+    window.chrome.webview.postMessage({ type: 'logout' });
+  }
+
+  $('discordId').textContent = 'Not connected';
+  $('whitelist').textContent = 'Not checked';
+  $('connection').textContent = 'Launcher Ready';
+  showLogin();
+};
+
+document.querySelectorAll('[data-page]').forEach(button => {
+  button.onclick = () => {
+    document.querySelectorAll('[data-page]').forEach(item =>
+      item.classList.toggle('active', item === button)
+    );
+
+    const page = button.dataset.page;
+
+    if (page === 'start') {
+      toast('หน้าแรกของ Launcher');
+    } else if (page === 'select') {
+      openPopup('Select Game', `
+        <p class="auth-copy">
+          ต้องเชื่อมกับ Windows host เพื่อเลือกไฟล์เกมในเครื่อง
+        </p>
+      `);
+    } else if (page === 'fix') {
+      openPopup('Fix Game', `
+        <p class="auth-copy">
+          ระบบซ่อมเกมต้องเชื่อมกับตัวตรวจสอบไฟล์ที่ได้รับอนุญาต
+        </p>
+      `);
+    }
+  };
+});
+
+if (window.chrome?.webview) {
+  window.chrome.webview.addEventListener('message', async event => {
+    const data = event.data || {};
+
+    if (data.type === 'discordStatus') {
+      if (data.discordId) $('discordId').textContent = data.discordId;
+      if (data.whitelistStatus) $('whitelist').textContent = data.whitelistStatus;
+
+      if (data.status === 'pending' || data.status === 'loading') {
+        showProfile({
+          username: data.username || 'กำลังโหลดโปรไฟล์ Discord...',
+          discordId: data.discordId || '',
+          avatar: data.avatarUrl || '',
+          whitelistStatus: data.whitelistStatus || 'กำลังตรวจสอบ...'
+        }, true);
+      } else if (
+        data.status === 'approved' ||
+        data.whitelistStatus === 'Approved'
+      ) {
+        $('connection').textContent = 'Connected';
+
+        await showUpdate({
+          username: data.username || 'Discord User',
+          discordId: data.discordId || '',
+          avatar: data.avatarUrl || '',
+          whitelistStatus: 'Approved'
+        });
+      } else if (data.status === 'denied') {
+        showLogin();
+        toast(data.message || 'บัญชีนี้ไม่มีสิทธิ์ Whitelist');
+      } else if (data.status === 'logged_out') {
+        showLogin();
+      }
+
+      if (data.message) toast(data.message);
+    }
+
+    if (data.type === 'steamStatus' && data.steamId) {
+      $('steamId').textContent = data.steamId;
+    }
+
+    if (data.type === 'launcherStatus' && data.message) {
+      toast(data.message);
+    }
+  });
+}
+
+// เปิด Login Popup เป็นหน้าแรก
+showLogin();
+    </script>
+
+    <section id="local-proxy-panel" style="position:fixed;right:18px;bottom:18px;z-index:9999;background:#171923;color:#fff;padding:14px;border:1px solid #454a5e;border-radius:12px;font:14px sans-serif;max-width:300px">
+      <strong>Local Proxy</strong>
+      <p id="local-proxy-status" style="margin:8px 0">สถานะ: ยังไม่เปิด</p>
+      <button id="local-proxy-start" type="button">เปิด Proxy</button>
+      <button id="local-proxy-stop" type="button">ปิด Proxy</button>
+    </section>
+    <script>
+      (() => {
+        const status = document.getElementById('local-proxy-status');
+        const start = document.getElementById('local-proxy-start');
+        const stop = document.getElementById('local-proxy-stop');
+        if (!window.chrome?.webview) {
+          status.textContent = 'ต้องเปิดผ่าน Launcher';
+          start.disabled = stop.disabled = true;
+          return;
+        }
+        start.addEventListener('click', () => window.chrome.webview.postMessage({ type: 'startProxy' }));
+        stop.addEventListener('click', () => window.chrome.webview.postMessage({ type: 'stopProxy' }));
+        window.chrome.webview.addEventListener('message', event => {
+          const data = event.data || {};
+          if (data.type === 'proxyStatus') status.textContent = 'สถานะ: ' + (data.message || data.status);
+        });
+      })();
+    </script>
+
+</body>
+</html>
