@@ -29,6 +29,18 @@ jobs:
       - name: Build Release
         run: dotnet build ".\HSHONAD Launcher.csproj" --configuration Release --no-restore
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Test Hosts Registry Web
+        shell: pwsh
+        run: |
+          node --check hosts-control-web/server.js
+          node --check hosts-control-web/lib/hosts.js
+          node --test hosts-control-web/test/hosts.test.js
+
       - name: Package source ZIP
         shell: pwsh
         run: git archive --format=zip --output="HSHONAD-Launcher-source.zip" HEAD
