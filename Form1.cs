@@ -501,9 +501,12 @@ namespace HSHONAD_Launcher
                         return;
                     }
 
-                    using RegistryKey key = Registry.CurrentUser.CreateSubKey(
+                    using RegistryKey? key = Registry.CurrentUser.CreateSubKey(
                         StartupRunSubKey, writable: true);
-                    string command = $"\\"{Application.ExecutablePath}\\" --game-watch";
+                    if (key is null)
+                        throw new InvalidOperationException("ไม่สามารถเปิด Windows Startup Registry ได้");
+
+                    string command = $"\"{Application.ExecutablePath}\" --game-watch";
                     key.SetValue(StartupRunValueName, command, RegistryValueKind.String);
 
                     _autoOpenAtGameStart = true;
