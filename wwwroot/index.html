@@ -857,6 +857,15 @@ $('settingsBtn').onclick = () => {
       value="${escapeHTML(apiBase())}">
     <button class="primary" id="saveApi">บันทึก API URL</button>
     <div style="height:18px"></div>
+    <label for="hostsRegistryUrlInput">Hosts Registry Web URL</label>
+    <p class="auth-copy" style="margin:6px 0 10px;text-align:left">
+      URL ของเว็บทะเบียนโดเมนที่เก็บข้อมูลใน PostgreSQL แยกจาก Launcher API
+    </p>
+    <input class="field" id="hostsRegistryUrlInput"
+      placeholder="https://your-host-registry.onrender.com"
+      value="${escapeHTML(window.hostsRegistryUrl || '')}">
+    <button class="primary" id="saveHostsRegistryUrl" style="margin-top:10px">บันทึก Hosts Registry URL</button>
+    <div style="height:18px"></div>
     <label for="proxyHostsInput">HSHONAD Proxy — Allowed Hosts</label>
     <p class="auth-copy" style="margin:6px 0 10px;text-align:left">
       ใส่เฉพาะ Host ที่ HSHONAD มีสิทธิ์จัดการ หนึ่งรายการต่อบรรทัด เช่น api.your-domain.example หรือ *.your-domain.example
@@ -879,6 +888,17 @@ $('settingsBtn').onclick = () => {
     } else {
       toast('บันทึก API URL ในเบราว์เซอร์แล้ว');
     }
+  };
+
+  $('saveHostsRegistryUrl').onclick = () => {
+    const value = $('hostsRegistryUrlInput').value.trim().replace(/\/$/, '');
+    if (value && (!/^https:\/\//i.test(value) &&
+        !/^http:\/\/localhost(?::\d+)?$/i.test(value) &&
+        !/^http:\/\/127\.0\.0\.1(?::\d+)?$/i.test(value))) {
+      return toast('Hosts Registry URL ต้องใช้ HTTPS ยกเว้น localhost สำหรับทดสอบ');
+    }
+    if (!window.chrome?.webview) return toast('ต้องเปิดผ่าน HSHONAD Launcher');
+    window.chrome.webview.postMessage({ type: 'saveHostsRegistryUrl', url: value });
   };
 
   $('saveProxyHosts').onclick = () => {
@@ -946,16 +966,26 @@ function renderGameSelection() {
 }
 
 function renderFixPopup() {
-  openPopup('Fix Game & Hosts', `
+  openPopup('Fix Game & Hosts', \`
     <div class="auth">
       <p class="auth-copy">
         ตรวจสอบไฟล์เกมที่เลือกแบบอ่านอย่างเดียวก่อน ยังไม่ลบ เขียนทับ หรือดาวน์โหลดไฟล์เกมใด ๆ
         การซ่อมไฟล์เกมจริงต้องใช้ Manifest และ SHA-256 ที่เชื่อถือได้
       </p>
       <div class="news" id="fixScanResult" style="text-align:left;white-space:pre-wrap;overflow-wrap:anywhere" aria-live="polite">
-        ${escapeHTML(window.gameScanSummary || 'กดปุ่มเพื่อตรวจสอบไฟล์เกม')}
+        \${escapeHTML(window.gameScanSummary || 'กดปุ่มเพื่อตรวจสอบไฟล์เกม')}
       </div>
       <button class="primary" id="runGameScan" style="margin-top:14px">ตรวจสอบไฟล์เกม</button>
+    </div>
+
+    <div class="news" style="margin-top:16px;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere">
+      <strong>Web Database — Hosts Registry</strong>
+      <p class="auth-copy" style="margin:8px 0">
+        ดึงทะเบียนโดเมนจากเว็บไซต์ฐานข้อมูลเพื่อดูสถานะ วัตถุประสงค์ และหมายเหตุ
+        การโหลดนี้เป็นแบบอ่านอย่างเดียว ไม่เปลี่ยนไฟล์ Hosts ของ Windows
+      </p>
+      <div id="hostsRegistryResult" aria-live="polite">\${escapeHTML(window.hostsRegistrySummary || 'กดปุ่มเพื่อโหลดข้อมูลจาก Web Database')}</div>
+      <button class="primary" id="loadHostsRegistryBtn" style="margin-top:12px">โหลดทะเบียนจาก Web DB</button>
     </div>
 
     <div class="news" style="margin-top:16px;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere">
@@ -964,19 +994,25 @@ function renderFixPopup() {
         ตรวจสอบรายการที่กำหนดเองของโดเมน API ด้านล่าง หรือคืนค่าให้โดเมนเหล่านี้ใช้ DNS ปกติ
         โปรแกรมจะไม่เปลี่ยนโดเมนอื่น และจะสำรองไฟล์ Hosts ก่อนแก้ไข
       </p>
-      <div id="hostsScanResult" aria-live="polite">${escapeHTML(window.hostsScanSummary || 'กด “ตรวจสอบ Hosts” เพื่อดูรายการที่เกี่ยวข้อง')}</div>
+      <div id="hostsScanResult" aria-live="polite">\${escapeHTML(window.hostsScanSummary || 'กด “ตรวจสอบ Hosts” เพื่อดูรายการที่เกี่ยวข้อง')}</div>
       <button class="secondary" id="inspectHostsBtn" style="margin-top:12px">ตรวจสอบ Hosts</button>
       <button class="primary" id="restoreHostsBtn" style="margin-top:8px">ลบ Override / คืนค่า DNS</button>
       <p class="auth-copy" style="font-size:11px;margin:8px 0 0">
         หาก Windows ปฏิเสธสิทธิ์แก้ไข ให้เปิด Launcher ด้วย Run as administrator เฉพาะตอนคืนค่า Hosts
       </p>
     </div>
-  `);
+  \`);
   $('runGameScan').onclick = () => {
     if (!window.chrome?.webview) return toast('ต้องเปิดผ่าน HSHONAD Launcher บน Windows');
     $('runGameScan').disabled = true;
     $('fixScanResult').textContent = 'กำลังตรวจสอบ...';
     window.chrome.webview.postMessage({ type: 'scanGame' });
+  };
+  $('loadHostsRegistryBtn').onclick = () => {
+    if (!window.chrome?.webview) return toast('ต้องเปิดผ่าน HSHONAD Launcher บน Windows');
+    if (!window.hostsRegistryUrl) return toast('ตั้งค่า Hosts Registry URL ใน Settings ก่อน');
+    $('hostsRegistryResult').textContent = 'กำลังโหลดทะเบียนจาก Web Database...';
+    window.chrome.webview.postMessage({ type: 'loadHostsRegistry' });
   };
   $('inspectHostsBtn').onclick = () => {
     if (!window.chrome?.webview) return toast('ต้องเปิดผ่าน HSHONAD Launcher บน Windows');
@@ -1110,6 +1146,24 @@ if (window.chrome?.webview) {
       window.hostsScanSummary = detail;
       if (result) result.textContent = detail;
       if (data.message) toast(data.message);
+    }
+
+    if (data.type === 'hostsRegistryStatus') {
+      window.hostsRegistrySummary = data.summary || data.message || '';
+      const result = $('hostsRegistryResult');
+      if (result) result.textContent = window.hostsRegistrySummary;
+      if (data.message) toast(data.message);
+    }
+
+    if (data.type === 'hostsRegistryUrl') {
+      window.hostsRegistryUrl = data.url || '';
+      const field = $('hostsRegistryUrlInput');
+      if (field) field.value = window.hostsRegistryUrl;
+      if (data.message) toast(data.message);
+    }
+
+    if (data.type === 'hostsRegistryUrlStatus' && data.message) {
+      toast(data.message);
     }
 
     if (data.type === 'gameStatus') {
