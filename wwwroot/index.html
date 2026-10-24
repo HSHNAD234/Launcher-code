@@ -158,7 +158,7 @@
 
         .panels {
             display: grid;
-            grid-template-columns: 1fr 1.3fr;
+            grid-template-columns: 1fr;
             gap: 16px;
         }
 
@@ -207,28 +207,6 @@
             color: var(--text);
             border: 1px solid var(--line);
             border-radius: 9px;
-        }
-
-        .update-meta {
-            display: flex;
-            justify-content: space-between;
-            font-size: 12px;
-            color: var(--muted);
-            margin: 18px 0 8px;
-        }
-
-        .progress {
-            height: 7px;
-            border-radius: 99px;
-            background: #ffffff18;
-            overflow: hidden;
-        }
-
-        .progress-fill {
-            height: 100%;
-            width: 0;
-            background: var(--gold);
-            transition: width .3s;
         }
 
         .news {
@@ -496,17 +474,6 @@
                     <button class="secondary" id="logoutBtn">Log out</button>
                 </div>
 
-                <div class="panel">
-                    <h3>Game Update <span class="tag" id="versionTag">VERSION —</span></h3>
-                    <p id="updateMessage">ตรวจสอบสถานะอัปเดตจากระบบ Launcher</p>
-                    <div class="update-meta">
-                        <span id="updateStatus">Waiting</span>
-                        <span id="progressText">0%</span>
-                    </div>
-                    <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
-                    <p id="updateDetail">ยังไม่ได้เชื่อมต่อ Patch API</p>
-                    <button class="primary" id="checkUpdateBtn">Check Update</button>
-                </div>
             </section>
 
             <div class="news">
@@ -530,7 +497,6 @@
     <script>
 const $ = id => document.getElementById(id);
 const API_KEY = 'hshApiBase';
-const DISMISSED_KEY = 'hshDismissedUpdateVersion';
 
 function toast(message) {
   const el = $('toast');
@@ -615,7 +581,7 @@ function showProfile(profile = {}, loading = true) {
         loading
           ? `<div class="modal-progress"><div style="width:45%"></div></div>
              <p class="muted">กำลังยืนยันตัวตนและตรวจสอบ Whitelist...</p>`
-          : `<button class="primary" id="profileContinue">ไปยัง Game Update</button>`
+          : `<button class="primary" id="profileContinue">เข้าสู่หน้า Launcher</button>`
       }
     </div>
   `);
@@ -625,7 +591,7 @@ function showProfile(profile = {}, loading = true) {
   });
 
   if (!loading) {
-    $('profileContinue').onclick = () => showUpdate(profile);
+    $('profileContinue').onclick = () => { closePopup(); toast('เข้าสู่ระบบและตรวจสอบ Whitelist สำเร็จ'); };
   }
 }
 
@@ -708,7 +674,8 @@ async function pollLogin(api, sessionId, secret) {
         $('whitelist').textContent = 'Approved';
         $('connection').textContent = 'Connected';
 
-        await showUpdate(profile);
+        closePopup();
+        toast('เข้าสู่ระบบและตรวจสอบ Whitelist สำเร็จ');
         return;
       }
 
@@ -733,118 +700,7 @@ async function pollLogin(api, sessionId, secret) {
   toast('หมดเวลารอ Login กรุณาลองใหม่');
 }
 
-async function showUpdate(profile = {}) {
-  openPopup('Game Update', `
-    <div class="auth">
-      <div class="state">● เข้าสู่ระบบแล้ว</div>
-      <h2 style="margin-top:20px">Game Update</h2>
-      <p class="auth-copy">
-        ตรวจสอบเวอร์ชันเกมและอัปเดตล่าสุดก่อนเข้าเล่น
-      </p>
-
-      <div class="modal-progress">
-        <div id="modalFill"></div>
-      </div>
-      <div class="muted" id="modalStatus">กำลังตรวจสอบอัปเดต...</div>
-
-      <button class="primary" id="modalCheck" style="margin-top:18px">
-        ตรวจสอบอัปเดตอีกครั้ง
-      </button>
-
-      <button class="dismiss" id="dismissUpdate">
-        ไม่ต้องแสดงจนกว่าจะมีอัปเดตใหม่
-      </button>
-    </div>
-  `);
-
-  $('modalCheck').onclick = () => checkManifest(true);
-  $('dismissUpdate').onclick = () => {
-    const version = window.currentVersion;
-
-    if (!version) {
-      toast('ต้องตรวจสอบเวอร์ชันก่อนจึงจะซ่อนได้');
-      return;
-    }
-
-    localStorage.setItem(DISMISSED_KEY, version);
-    closePopup();
-  };
-
-  await checkManifest(false);
-}
-
-async function checkManifest(manual) {
-  const api = apiBase();
-  const status = $('modalStatus');
-  const fill = $('modalFill');
-  const button = $('modalCheck');
-
-  if (!api) {
-    if (status) status.textContent = 'ยังไม่ได้ตั้งค่า Backend API';
-    toast('ตั้งค่า Backend API ใน Settings ก่อน');
-    return;
-  }
-
-  if (button) button.disabled = true;
-  if (status) status.textContent = 'กำลังตรวจสอบเวอร์ชัน...';
-  if (fill) fill.style.width = '25%';
-
-  try {
-    const response = await fetch(api + '/api/launcher/manifest');
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-
-    const data = await response.json();
-    const version = String(data.version || '').trim();
-
-    if (!version) throw new Error('Manifest ไม่มี version');
-
-    window.currentVersion = version;
-    $('versionTag').textContent = 'VERSION ' + version;
-
-    const dismissed = localStorage.getItem(DISMISSED_KEY);
-
-    if (dismissed && dismissed !== version) {
-      localStorage.removeItem(DISMISSED_KEY);
-    }
-
-    if (localStorage.getItem(DISMISSED_KEY) === version) {
-      closePopup();
-      return;
-    }
-
-    if (fill) fill.style.width = '100%';
-
-    if (status) {
-      status.textContent = data.update_available
-        ? 'พบอัปเดตใหม่: ' + version
-        : 'เกมเป็นเวอร์ชันล่าสุด (' + version + ')';
-    }
-
-    $('updateMessage').textContent =
-      data.message || 'ตรวจสอบ Manifest สำเร็จ';
-
-    $('updateStatus').textContent =
-      data.update_available ? 'Update available' : 'Up to date';
-
-    $('updateDetail').textContent =
-      data.update_available
-        ? 'มีเวอร์ชันใหม่ — ต้องเชื่อมระบบดาวน์โหลดแพตช์'
-        : 'ตรวจสอบเวอร์ชันสำเร็จ';
-
-    $('progressFill').style.width = '100%';
-    $('progressText').textContent = '100%';
-
-  } catch (error) {
-    if (fill) fill.style.width = '0%';
-    if (status) status.textContent = 'ตรวจสอบไม่สำเร็จ: ' + error.message;
-    if (manual) toast('ตรวจสอบอัปเดตไม่สำเร็จ');
-  } finally {
-    if (button) button.disabled = false;
-  }
-}
-
 $('loginBtn').onclick = showLogin;
-$('checkUpdateBtn').onclick = () => showUpdate();
 
 $('settingsBtn').onclick = () => {
   openPopup('Settings', `
@@ -943,12 +799,8 @@ if (window.chrome?.webview) {
       ) {
         $('connection').textContent = 'Connected';
 
-        await showUpdate({
-          username: data.username || 'Discord User',
-          discordId: data.discordId || '',
-          avatar: data.avatarUrl || '',
-          whitelistStatus: 'Approved'
-        });
+        closePopup();
+        toast('เข้าสู่ระบบและตรวจสอบ Whitelist สำเร็จ');
       } else if (data.status === 'denied') {
         showLogin();
         toast(data.message || 'บัญชีนี้ไม่มีสิทธิ์ Whitelist');
