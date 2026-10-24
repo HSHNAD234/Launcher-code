@@ -5,6 +5,7 @@ This branch adds Windows-side game selection, read-only checks, a local HTTPS CO
 ## Changes
 
 - **Select Game:** use a Windows file picker to select a game `.exe`; persist the full path under `%LOCALAPPDATA%\HSHONAD\Launcher\game-path.txt`.
+- **Launch gate:** the Launch Game UI and native C# handler both require an approved Discord/whitelist result for the current Launcher session.
 - **Fix (read-only):** verify the selected executable exists and show basic local file/folder information. It does not write, replace, or delete game files because the current manifest endpoint has not been shown to provide per-file trusted SHA-256 values and download URLs.
 - **HSHONAD Proxy:** listen only on `127.0.0.1:8888`; accept HTTPS CONNECT only for explicitly configured host names. The allowlist is saved to `%LOCALAPPDATA%\HSHONAD\Launcher\proxy-allowlist.txt`. Use exact names (for example, `api.your-domain.example`) or a wildcard subdomain (for example, `*.your-domain.example`). These are examples, not real HSHONAD game domains.
 - **Game session:** monitor the selected process roughly every 2.5 seconds. When it is detected, lower the Launcher process priority to `BelowNormal` and start the proxy only when an allowlist exists. When the selected game is no longer detected, stop the proxy and restore the previous Launcher priority.
