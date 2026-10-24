@@ -11,6 +11,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Microsoft.Win32;
 using Microsoft.Web.WebView2.Core;
 
 namespace HSHONAD_Launcher
@@ -37,7 +38,11 @@ namespace HSHONAD_Launcher
         private bool _monitorTickBusy;
         private bool _isAuthApproved;
         private bool _lowPowerActive;
+        private bool _autoOpenAtGameStart;
+        private bool _startedAsGameWatcher;
+        private bool _allowApplicationExit;
         private ProcessPriorityClass? _originalPriority;
+        private readonly NotifyIcon _trayIcon = new NotifyIcon();
 
         private string UserDataDirectory => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -51,6 +56,20 @@ namespace HSHONAD_Launcher
         public Form1()
         {
             InitializeComponent();
+
+            _startedAsGameWatcher = Environment.GetCommandLineArgs().Any(
+                arg => string.Equals(arg, "--game-watch", StringComparison.OrdinalIgnoreCase));
+            _autoOpenAtGameStart = IsAutoOpenAtGameStartConfigured();
+
+            ConfigureTrayIcon();
+
+            if (_startedAsGameWatcher && _autoOpenAtGameStart)
+            {
+                WindowState = FormWindowState.Minimized;
+                ShowInTaskbar = false;
+                Shown += (_, _) => BeginInvoke(new Action(HideToTray));
+            }
+
             _gameMonitorTimer.Tick += GameMonitorTimer_Tick;
         }
 
@@ -104,6 +123,11 @@ namespace HSHONAD_Launcher
                     {
                         type = "hostsRegistryUrl",
                         url = LoadHostsRegistryUrl()
+                    });
+                    await SendToPageAsync(new
+                    {
+                        type = "autoOpenAtGameStart",
+                        enabled = _autoOpenAtGameStart
                     });
                     await RefreshGameStateAsync();
                 };
@@ -204,6 +228,12 @@ namespace HSHONAD_Launcher
                             doc.RootElement.TryGetProperty("url", out var urlEl)
                                 ? urlEl.GetString() ?? ""
                                 : "");
+                        break;
+
+                    case "setAutoOpenAtGameStart":
+                        bool enabled = doc.RootElement.TryGetProperty("enabled", out var enabledEl) &&
+                                       enabledEl.ValueKind == JsonValueKind.True;
+                        await SetAutoOpenAtGameStartAsync(enabled);
                         break;
                 }
             }
@@ -383,6 +413,131 @@ namespace HSHONAD_Launcher
                     type = "discordStatus",
                     status = "error",
                     message = "Login ไม่สำเร็จ: " + ex.Message
+                });
+            }
+        }
+
+        private const string StartupRunSubKey =
+            @"Software\Microsoft\Windows\CurrentVersion\Run";
+        private const string StartupRunValueName = "HSHONADLauncherGameWatcher";
+
+        private bool IsAutoOpenAtGameStartConfigured()
+        {
+            try
+            {
+                using RegistryKey? key = Registry.CurrentUser.OpenSubKey(
+                    StartupRunSubKey, writable: false);
+                string? command = key?.GetValue(StartupRunValueName) as string;
+                return !string.IsNullOrWhiteSpace(command) &&
+                       command.Contains("--game-watch", StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void ConfigureTrayIcon()
+        {
+            var menu = new ContextMenuStrip();
+            menu.Items.Add("เปิด HSHONAD Launcher", null, (_, _) => RestoreLauncherWindow());
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add("ออกจาก Launcher", null, (_, _) =>
+            {
+                _allowApplicationExit = true;
+                _trayIcon.Visible = false;
+                Close();
+            });
+
+            _trayIcon.Icon = SystemIcons.Application;
+            _trayIcon.Text = "HSHONAD Launcher - Game Watcher";
+            _trayIcon.ContextMenuStrip = menu;
+            _trayIcon.DoubleClick += (_, _) => RestoreLauncherWindow();
+            _trayIcon.Visible = _autoOpenAtGameStart;
+        }
+
+        private void HideToTray()
+        {
+            if (IsDisposed)
+                return;
+
+            _trayIcon.Visible = _autoOpenAtGameStart;
+            ShowInTaskbar = false;
+            WindowState = FormWindowState.Minimized;
+            Hide();
+        }
+
+        private void RestoreLauncherWindow()
+        {
+            if (IsDisposed)
+                return;
+
+            ShowInTaskbar = true;
+            if (!Visible)
+                Show();
+
+            if (WindowState == FormWindowState.Minimized)
+                WindowState = FormWindowState.Normal;
+
+            Activate();
+            BringToFront();
+        }
+
+        private async Task SetAutoOpenAtGameStartAsync(bool enabled)
+        {
+            try
+            {
+                if (enabled)
+                {
+                    string? gamePath = _gameExecutablePath ?? LoadSavedGamePath();
+                    if (string.IsNullOrWhiteSpace(gamePath) || !File.Exists(gamePath))
+                    {
+                        await SendToPageAsync(new
+                        {
+                            type = "autoOpenAtGameStartStatus",
+                            enabled = false,
+                            message = "กรุณาใช้ Select Game เลือกไฟล์เกม .exe ก่อน"
+                        });
+                        return;
+                    }
+
+                    using RegistryKey key = Registry.CurrentUser.CreateSubKey(
+                        StartupRunSubKey, writable: true);
+                    string command = $"\\"{Application.ExecutablePath}\\" --game-watch";
+                    key.SetValue(StartupRunValueName, command, RegistryValueKind.String);
+
+                    _autoOpenAtGameStart = true;
+                    _trayIcon.Visible = true;
+                    await SendToPageAsync(new
+                    {
+                        type = "autoOpenAtGameStartStatus",
+                        enabled = true,
+                        message = "เปิดอัตโนมัติแล้ว: Launcher จะทำงานเบื้องหลังและแสดงขึ้นเมื่อเกมเริ่ม"
+                    });
+                }
+                else
+                {
+                    using RegistryKey? key = Registry.CurrentUser.OpenSubKey(
+                        StartupRunSubKey, writable: true);
+                    key?.DeleteValue(StartupRunValueName, throwOnMissingValue: false);
+
+                    _autoOpenAtGameStart = false;
+                    _trayIcon.Visible = false;
+                    await SendToPageAsync(new
+                    {
+                        type = "autoOpenAtGameStartStatus",
+                        enabled = false,
+                        message = "ปิดการเปิด Launcher อัตโนมัติแล้ว"
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                await SendToPageAsync(new
+                {
+                    type = "autoOpenAtGameStartStatus",
+                    enabled = _autoOpenAtGameStart,
+                    message = "บันทึกการตั้งค่าเปิดอัตโนมัติไม่สำเร็จ: " + ex.Message
                 });
             }
         }
@@ -913,6 +1068,15 @@ namespace HSHONAD_Launcher
 
             if (running)
             {
+                // If the Launcher is running as a background game watcher,
+                // restore it when the selected game starts. Do not steal focus
+                // when the Launcher is already visible.
+                if (_autoOpenAtGameStart &&
+                    (!Visible || WindowState == FormWindowState.Minimized))
+                {
+                    RestoreLauncherWindow();
+                }
+
                 EnableLowPowerMode();
 
                 // Start the local proxy only when a game process is detected and
@@ -1177,18 +1341,29 @@ namespace HSHONAD_Launcher
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            // When auto-open is enabled, closing the window hides it to the
+            // tray so the watcher can still detect the selected game.
+            if (_autoOpenAtGameStart && !_allowApplicationExit)
+            {
+                e.Cancel = true;
+                HideToTray();
+                return;
+            }
+
             _loginCts?.Cancel();
             _loginCts?.Dispose();
             _gameMonitorTimer.Stop();
             _gameMonitorTimer.Dispose();
             DisableLowPowerMode();
 
-            // การปิด listener จะเกิดขึ้นเมื่อฟอร์มกำลังปิด
             if (_proxy != null)
             {
                 _proxy.DisposeAsync().AsTask().GetAwaiter().GetResult();
                 _proxy = null;
             }
+
+            _trayIcon.Visible = false;
+            _trayIcon.Dispose();
 
             base.OnFormClosing(e);
         }
