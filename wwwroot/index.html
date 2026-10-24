@@ -966,14 +966,14 @@ function renderGameSelection() {
 }
 
 function renderFixPopup() {
-  openPopup('Fix Game & Hosts', \`
+  openPopup('Fix Game & Hosts', `
     <div class="auth">
       <p class="auth-copy">
         ตรวจสอบไฟล์เกมที่เลือกแบบอ่านอย่างเดียวก่อน ยังไม่ลบ เขียนทับ หรือดาวน์โหลดไฟล์เกมใด ๆ
         การซ่อมไฟล์เกมจริงต้องใช้ Manifest และ SHA-256 ที่เชื่อถือได้
       </p>
       <div class="news" id="fixScanResult" style="text-align:left;white-space:pre-wrap;overflow-wrap:anywhere" aria-live="polite">
-        \${escapeHTML(window.gameScanSummary || 'กดปุ่มเพื่อตรวจสอบไฟล์เกม')}
+        ${escapeHTML(window.gameScanSummary || 'กดปุ่มเพื่อตรวจสอบไฟล์เกม')}
       </div>
       <button class="primary" id="runGameScan" style="margin-top:14px">ตรวจสอบไฟล์เกม</button>
     </div>
@@ -984,7 +984,7 @@ function renderFixPopup() {
         ดึงทะเบียนโดเมนจากเว็บไซต์ฐานข้อมูลเพื่อดูสถานะ วัตถุประสงค์ และหมายเหตุ
         การโหลดนี้เป็นแบบอ่านอย่างเดียว ไม่เปลี่ยนไฟล์ Hosts ของ Windows
       </p>
-      <div id="hostsRegistryResult" aria-live="polite">\${escapeHTML(window.hostsRegistrySummary || 'กดปุ่มเพื่อโหลดข้อมูลจาก Web Database')}</div>
+      <div id="hostsRegistryResult" aria-live="polite">${escapeHTML(window.hostsRegistrySummary || 'กดปุ่มเพื่อโหลดข้อมูลจาก Web Database')}</div>
       <button class="primary" id="loadHostsRegistryBtn" style="margin-top:12px">โหลดทะเบียนจาก Web DB</button>
     </div>
 
@@ -994,14 +994,14 @@ function renderFixPopup() {
         ตรวจสอบรายการที่กำหนดเองของโดเมน API ด้านล่าง หรือคืนค่าให้โดเมนเหล่านี้ใช้ DNS ปกติ
         โปรแกรมจะไม่เปลี่ยนโดเมนอื่น และจะสำรองไฟล์ Hosts ก่อนแก้ไข
       </p>
-      <div id="hostsScanResult" aria-live="polite">\${escapeHTML(window.hostsScanSummary || 'กด “ตรวจสอบ Hosts” เพื่อดูรายการที่เกี่ยวข้อง')}</div>
+      <div id="hostsScanResult" aria-live="polite">${escapeHTML(window.hostsScanSummary || 'กด “ตรวจสอบ Hosts” เพื่อดูรายการที่เกี่ยวข้อง')}</div>
       <button class="secondary" id="inspectHostsBtn" style="margin-top:12px">ตรวจสอบ Hosts</button>
       <button class="primary" id="restoreHostsBtn" style="margin-top:8px">ลบ Override / คืนค่า DNS</button>
       <p class="auth-copy" style="font-size:11px;margin:8px 0 0">
         หาก Windows ปฏิเสธสิทธิ์แก้ไข ให้เปิด Launcher ด้วย Run as administrator เฉพาะตอนคืนค่า Hosts
       </p>
     </div>
-  \`);
+  `);
   $('runGameScan').onclick = () => {
     if (!window.chrome?.webview) return toast('ต้องเปิดผ่าน HSHONAD Launcher บน Windows');
     $('runGameScan').disabled = true;
