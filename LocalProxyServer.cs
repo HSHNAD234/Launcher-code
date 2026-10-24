@@ -88,7 +88,7 @@ namespace HSHONAD_Launcher
             catch (SocketException) when (token.IsCancellationRequested) { }
         }
 
-        private static async Task HandleClientAsync(
+        private async Task HandleClientAsync(
             TcpClient client, CancellationToken token)
         {
             using (client)
