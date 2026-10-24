@@ -505,7 +505,7 @@
                     <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
                     <p id="updateDetail">ยังไม่ได้เชื่อมต่อ Patch API</p>
                     <button class="primary" id="checkUpdateBtn">Check Update</button>
-                    <button class="secondary" id="launchGameBtn">Launch Game</button>
+                    <button class="secondary" id="launchGameBtn" disabled>Launch Game</button>
                     <p id="gamePathCaption" style="font-size:12px;color:var(--muted);overflow-wrap:anywhere">ยังไม่ได้เลือกไฟล์เกม</p>
                 </div>
             </section>
@@ -568,6 +568,8 @@ function apiBase() {
 }
 
 function showLogin() {
+  const launchButton = $('launchGameBtn');
+  if (launchButton) launchButton.disabled = true;
   openPopup('เข้าสู่ระบบ', `
     <div class="auth">
       <img class="auth-logo"
@@ -909,6 +911,7 @@ $('accountBtn').onclick = () => {
 };
 
 $('logoutBtn').onclick = () => {
+  if ($('launchGameBtn')) $('launchGameBtn').disabled = true;
   if (window.chrome?.webview) {
     window.chrome.webview.postMessage({ type: 'logout' });
   }
@@ -995,6 +998,7 @@ if (window.chrome?.webview) {
       if (data.whitelistStatus) $('whitelist').textContent = data.whitelistStatus;
 
       if (data.status === 'pending' || data.status === 'loading') {
+        if ($('launchGameBtn')) $('launchGameBtn').disabled = true;
         showProfile({
           username: data.username || 'กำลังโหลดโปรไฟล์ Discord...',
           discordId: data.discordId || '',
@@ -1005,6 +1009,7 @@ if (window.chrome?.webview) {
         data.status === 'approved' ||
         data.whitelistStatus === 'Approved'
       ) {
+        if ($('launchGameBtn')) $('launchGameBtn').disabled = false;
         $('connection').textContent = 'Connected';
 
         await showUpdate({
@@ -1014,9 +1019,11 @@ if (window.chrome?.webview) {
           whitelistStatus: 'Approved'
         });
       } else if (data.status === 'denied') {
+        if ($('launchGameBtn')) $('launchGameBtn').disabled = true;
         showLogin();
         toast(data.message || 'บัญชีนี้ไม่มีสิทธิ์ Whitelist');
       } else if (data.status === 'logged_out') {
+        if ($('launchGameBtn')) $('launchGameBtn').disabled = true;
         showLogin();
       }
 
