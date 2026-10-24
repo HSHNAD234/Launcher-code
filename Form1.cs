@@ -345,6 +345,16 @@ namespace HSHONAD_Launcher
             if (dialog.ShowDialog(this) != DialogResult.OK)
                 return;
 
+            if (!string.Equals(Path.GetExtension(dialog.FileName), ".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                MessageBox.Show(
+                    "กรุณาเลือกไฟล์เกมนามสกุล .exe",
+                    "HSHONAD Launcher",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
             try
             {
                 Directory.CreateDirectory(UserDataDirectory);
@@ -680,6 +690,10 @@ namespace HSHONAD_Launcher
                         ? "ยังไม่ได้ตั้งค่า Host ที่อนุญาต Proxy จึงจะไม่ยอมรับปลายทางใด ๆ"
                         : $"บันทึก Host ที่อนุญาต {hosts.Length} รายการแล้ว"
                 });
+
+                // If a game is already running, apply a newly saved allowlist immediately.
+                if (hosts.Length > 0 && IsSelectedGameRunning() && _proxy?.IsRunning != true)
+                    await StartProxyAsync();
             }
             catch (Exception ex)
             {
