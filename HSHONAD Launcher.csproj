@@ -15,6 +15,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<Compile Remove="HSHONAD.UpdateApi\**\*.cs" />
 		<Content Include="wwwroot\index.html">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
