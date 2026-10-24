@@ -39,7 +39,7 @@ jobs:
         run: |
           node --check hosts-control-web/server.js
           node --check hosts-control-web/lib/hosts.js
-          node --test hosts-control-web/test/hosts.test.js
+          node --test hosts-control-web/test/hosts.test.js hosts-control-web/test/launcher-html.test.js
 
       - name: Package source ZIP
         shell: pwsh
