@@ -108,6 +108,19 @@ namespace HSHONAD_Launcher
                     case "stopProxy":
                         await StopProxyAsync();
                         break;
+
+                    case "installLauncherUpdate":
+                        await SendToPageAsync(new
+                        {
+                            type = "launcherUpdateStatus",
+                            status = "installing",
+                            message = "กำลังเตรียมติดตั้งอัปเดต..."
+                        });
+                        await LauncherUpdateService.InstallAsync(
+                            GetString(doc.RootElement, "download_url", ""),
+                            GetString(doc.RootElement, "version", ""),
+                            GetString(doc.RootElement, "sha256", ""));
+                        break;
                 }
             }
             catch (Exception ex)
