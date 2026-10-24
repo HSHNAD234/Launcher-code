@@ -15,7 +15,7 @@ namespace HSHONAD_Launcher
 {
     public partial class Form1 : Form
     {
-        private const string BackendBaseUrl =
+        private string _backendBaseUrl =
             "https://hshonad-backend.onrender.com";
 
         private static readonly HttpClient Http =
@@ -85,6 +85,19 @@ namespace HSHONAD_Launcher
 
                 switch (type)
                 {
+                    case "configureApis":
+                        var configuredApi = GetString(doc.RootElement, "launcherApi", "");
+                        if (!string.IsNullOrWhiteSpace(configuredApi) &&
+                            Uri.TryCreate(configuredApi, UriKind.Absolute, out var configuredUri) &&
+                            (configuredUri.Scheme == Uri.UriSchemeHttps || configuredUri.IsLoopback && configuredUri.Scheme == Uri.UriSchemeHttp) &&
+                            string.IsNullOrEmpty(configuredUri.UserInfo) &&
+                            string.IsNullOrEmpty(configuredUri.Query) &&
+                            string.IsNullOrEmpty(configuredUri.Fragment))
+                        {
+                            _backendBaseUrl = configuredUri.ToString().TrimEnd('/');
+                        }
+                        break;
+
                     case "discordWhitelistLogin":
                         _loginCts?.Cancel();
                         _loginCts?.Dispose();
@@ -167,7 +180,7 @@ namespace HSHONAD_Launcher
             try
             {
                 using var response = await Http.PostAsync(
-                    BackendBaseUrl + "/api/launcher/device-sessions",
+                    _backendBaseUrl + "/api/launcher/device-sessions",
                     new StringContent("{}", Encoding.UTF8, "application/json"),
                     token);
 
@@ -195,7 +208,7 @@ namespace HSHONAD_Launcher
                     ?? throw new Exception("ไม่มี OAuth URL");
 
                 if (!Uri.TryCreate(verifyUrl, UriKind.Absolute, out var uri) ||
-                    !Uri.TryCreate(BackendBaseUrl, UriKind.Absolute, out var backendUri) ||
+                    !Uri.TryCreate(_backendBaseUrl, UriKind.Absolute, out var backendUri) ||
                     uri.Scheme != Uri.UriSchemeHttps ||
                     !string.Equals(uri.Host, backendUri.Host, StringComparison.OrdinalIgnoreCase) ||
                     uri.Port != backendUri.Port ||
@@ -220,7 +233,7 @@ namespace HSHONAD_Launcher
 
                     using var request = new HttpRequestMessage(
                         HttpMethod.Get,
-                        BackendBaseUrl + "/api/launcher/device-sessions/" +
+                        _backendBaseUrl + "/api/launcher/device-sessions/" +
                         Uri.EscapeDataString(sessionId));
 
                     request.Headers.Authorization =
