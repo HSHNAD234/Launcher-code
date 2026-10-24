@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HSHONAD Host Registry</title>
+<style>
+:root{--line:#343741;--gold:#d8b57a;--text:#f5f1e9;--muted:#a9abb4;--danger:#df7777;--good:#8ad5a0}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 15% 0%,#29251e 0,#101115 40%);font:15px "Segoe UI",Tahoma,sans-serif;color:var(--text)}
+.wrap{max-width:1000px;margin:auto;padding:32px 16px 56px}header{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:24px}.brand{font-size:13px;letter-spacing:.2em;color:var(--gold)}h1{font-size:clamp(25px,5vw,38px);margin:8px 0 4px}p{line-height:1.65;color:var(--muted)}
+.panel{background:#191b22eb;border:1px solid var(--line);border-radius:16px;padding:22px;margin:16px 0}.narrow{max-width:510px;margin:30px auto}
+label{display:block;font-size:13px;color:var(--muted);margin-bottom:7px}input[type=password],input[type=text]{width:100%;border:1px solid #454854;background:#101116;color:var(--text);padding:11px 12px;border-radius:9px;font:inherit}
+button{border:1px solid #4d4d50;background:#282a31;color:var(--text);padding:11px 15px;border-radius:9px;cursor:pointer;font:inherit}button.primary{background:var(--gold);color:#17130d;border:0;font-weight:750}
+.toolbar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px}.status{margin-top:12px;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--muted);font-size:13px}.good{color:var(--good)}.error{color:var(--danger)}
+.table-wrap{overflow-x:auto;margin-top:14px}table{width:100%;border-collapse:collapse;min-width:650px}th,td{padding:12px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{font-size:12px;letter-spacing:.07em;color:var(--muted);font-weight:600}
+td.domain{font-family:Consolas,monospace;font-size:13px;overflow-wrap:anywhere;width:34%}td input[type=text]{min-width:150px}.toggle{display:flex;align-items:center;gap:8px;white-space:nowrap}.toggle input{accent-color:var(--gold);width:17px;height:17px}
+.tag{display:inline-block;font-size:11px;border:1px solid var(--line);padding:4px 7px;border-radius:999px;color:var(--muted)}.foot{font-size:12px;border-top:1px solid var(--line);padding-top:16px;margin-top:18px}
+@media(max-width:700px){header{align-items:flex-start;flex-direction:column}.panel{padding:16px}}
+</style></head><body><main class="wrap">
+<header><div><div class="brand">HSHONAD • LAUNCHER</div><h1>Host Registry</h1><p>จัดการทะเบียนโดเมนผ่านเว็บและบันทึกลง PostgreSQL</p></div><span class="tag">Admin only</span></header>
+<section class="panel narrow" id="loginPanel"><h2>ผู้ดูแลระบบ</h2><p>ใส่ค่า ADMIN_TOKEN จาก Environment Variables ของบริการบน Render ค่านี้จะไม่ถูกบันทึกใน Local Storage</p>
+<form id="loginForm"><label for="adminToken">Admin token</label><input id="adminToken" type="password" autocomplete="current-password" required><button class="primary" style="margin-top:12px;width:100%" id="loginButton" type="submit">เข้าสู่ระบบ</button></form><div id="loginStatus" class="status" aria-live="polite"></div></section>
+<section class="panel" id="adminPanel" hidden><div class="toolbar"><div><h2 style="margin:0">ทะเบียนโดเมน</h2><p style="margin:6px 0 0">จัดการสถานะและคำอธิบายเท่านั้น เว็บนี้ไม่แก้ไข Windows Hosts หรือเปลี่ยนเส้นทาง network</p></div><div style="display:flex;gap:8px"><button id="refreshButton" type="button">โหลดใหม่</button><button id="logoutButton" type="button">ออกจากระบบ</button></div></div>
+<div class="table-wrap"><table><thead><tr><th>DOMAIN</th><th>เปิดใช้งาน</th><th>วัตถุประสงค์</th><th>หมายเหตุ</th></tr></thead><tbody id="rulesBody"></tbody></table></div>
+<div class="toolbar" style="margin-top:18px"><div class="status" id="adminStatus" aria-live="polite">กำลังโหลด...</div><button class="primary" id="saveButton" type="button">บันทึกลงฐานข้อมูล</button></div>
+<div class="foot"><strong>Read-only API:</strong><div id="apiPath" style="margin-top:6px;overflow-wrap:anywhere"></div><p>สถานะและหมายเหตุในทะเบียนนี้ไม่ใช่คำสั่งเปลี่ยน IP หรือแก้ไฟล์ Hosts ของ Windows</p></div></section>
+<script>
+const DOMAINS=["api.homesweethomegame.com","hshsapi.homesweethomegame.com","logapi.homesweethomegame.com","boatltpk"];
+const $=id=>document.getElementById(id);$("apiPath").textContent=location.origin+"/api/hosts-config";
+function status(id,msg,bad){const e=$(id);e.textContent=msg||"";e.className="status"+(bad?" error":"");if(!bad&&msg)e.classList.add("good");}
+async function request(url,options){const r=await fetch(url,Object.assign({credentials:"same-origin",headers:{"Content-Type":"application/json"}},options||{}));let d={};try{d=await r.json();}catch{}if(!r.ok)throw new Error(d.message||("HTTP "+r.status));return d;}
+function visible(on){$("loginPanel").hidden=on;$("adminPanel").hidden=!on;}
+function render(hosts){const body=$("rulesBody");body.replaceChildren();DOMAINS.forEach(domain=>{const item=hosts.find(x=>x.domain===domain)||{domain,enabled:false,purpose:"",note:""};const tr=document.createElement("tr");tr.dataset.domain=domain;
+const td0=document.createElement("td");td0.className="domain";td0.textContent=domain;tr.appendChild(td0);
+const td1=document.createElement("td"),label=document.createElement("label"),check=document.createElement("input");label.className="toggle";check.type="checkbox";check.className="enabled";check.checked=item.enabled===true;label.append(check,document.createTextNode("ใช้งาน"));td1.appendChild(label);tr.appendChild(td1);
+const td2=document.createElement("td"),purpose=document.createElement("input");purpose.type="text";purpose.className="purpose";purpose.maxLength=120;purpose.placeholder="วัตถุประสงค์";purpose.value=item.purpose||"";td2.appendChild(purpose);tr.appendChild(td2);
+const td3=document.createElement("td"),note=document.createElement("input");note.type="text";note.className="note";note.maxLength=160;note.placeholder="หมายเหตุ";note.value=item.note||"";td3.appendChild(note);tr.appendChild(td3);body.appendChild(tr);});}
+async function load(){$("saveButton").disabled=true;try{const d=await request("/api/admin/hosts");render(d.hosts||[]);status("adminStatus","โหลดข้อมูลจากฐานข้อมูลแล้ว",false);}catch(e){status("adminStatus",e.message,true);if(/เข้าสู่ระบบ/.test(e.message))visible(false);}finally{$("saveButton").disabled=false;}}
+$("loginForm").addEventListener("submit",async e=>{e.preventDefault();$("loginButton").disabled=true;status("loginStatus","กำลังตรวจสอบ...",false);try{await request("/api/admin/login",{method:"POST",body:JSON.stringify({token:$("adminToken").value})});$("adminToken").value="";visible(true);await load();}catch(err){status("loginStatus",err.message,true);}finally{$("loginButton").disabled=false;}});
+$("saveButton").addEventListener("click",async()=>{const hosts=Array.from($("rulesBody").querySelectorAll("tr")).map(tr=>({domain:tr.dataset.domain,enabled:tr.querySelector(".enabled").checked,purpose:tr.querySelector(".purpose").value.trim(),note:tr.querySelector(".note").value.trim()}));$("saveButton").disabled=true;status("adminStatus","กำลังบันทึก...",false);try{const d=await request("/api/admin/hosts",{method:"PUT",body:JSON.stringify({hosts})});render(d.hosts||hosts);status("adminStatus",d.message||"บันทึกแล้ว",false);}catch(err){status("adminStatus",err.message,true);}finally{$("saveButton").disabled=false;}});
+$("refreshButton").onclick=load;$("logoutButton").onclick=async()=>{try{await request("/api/admin/logout",{method:"POST",body:"{}"});}catch{}visible(false);status("loginStatus","ออกจากระบบแล้ว",false);};
+(async()=>{try{const d=await request("/api/admin/session");visible(d.authenticated===true);if(d.authenticated)await load();else status("loginStatus","เข้าสู่ระบบเพื่อแก้ไขข้อมูล",false);}catch(e){visible(false);status("loginStatus",e.message,true);}})();
+</script></main></body></html>
