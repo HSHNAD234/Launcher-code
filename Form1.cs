@@ -521,7 +521,13 @@ namespace HSHONAD_Launcher
             bool running = IsSelectedGameRunning();
 
             if (running == _lastGameRunning)
+            {
+                // Fail-safe: never leave the local Proxy listening while the
+                // selected game is not running, even if a process exits between ticks.
+                if (!running && _proxy?.IsRunning == true)
+                    await StopProxyAsync();
                 return;
+            }
 
             _lastGameRunning = running;
 
@@ -691,8 +697,13 @@ namespace HSHONAD_Launcher
                         : $"บันทึก Host ที่อนุญาต {hosts.Length} รายการแล้ว"
                 });
 
-                // If a game is already running, apply a newly saved allowlist immediately.
-                if (hosts.Length > 0 && IsSelectedGameRunning() && _proxy?.IsRunning != true)
+                // A running proxy must be restarted when the allowlist changes,
+                // otherwise removed hosts could remain allowed by the old instance.
+                if (_proxy?.IsRunning == true)
+                    await StopProxyAsync();
+
+                // If a game is already running, apply the updated allowlist immediately.
+                if (hosts.Length > 0 && IsSelectedGameRunning())
                     await StartProxyAsync();
             }
             catch (Exception ex)
