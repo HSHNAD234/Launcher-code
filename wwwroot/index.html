@@ -542,6 +542,16 @@
 
     <script>
 const $ = id => document.getElementById(id);
+
+window.addEventListener('DOMContentLoaded', () => {
+  if (window.chrome?.webview) {
+    window.chrome.webview.postMessage({
+      type: 'configureApis',
+      launcherApi: apiBase(),
+      updateApi: updateApiBase()
+    });
+  }
+});
 const API_KEY = 'hshApiBase';
 const UPDATE_API_KEY = 'hshUpdateApiBase';
 const DISMISSED_KEY = 'hshDismissedUpdateVersion';
@@ -586,7 +596,7 @@ function updateApiBase() {
 }
 
 function currentLauncherVersion() {
-  return '1.0.0';
+  return '__LAUNCHER_VERSION__';
 }
 
 function showLogin() {
@@ -973,6 +983,13 @@ $('settingsBtn').onclick = () => {
 
     localStorage.setItem(API_KEY, value);
     localStorage.setItem(UPDATE_API_KEY, updateValue);
+    if (window.chrome?.webview) {
+      window.chrome.webview.postMessage({
+        type: 'configureApis',
+        launcherApi: value,
+        updateApi: updateValue
+      });
+    }
     closePopup();
     toast('บันทึก API URLs แล้ว');
   };
