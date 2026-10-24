@@ -507,6 +507,19 @@
                     <p id="updateDetail">ยังไม่ได้เชื่อมต่อ Patch API</p>
                     <button class="primary" id="checkUpdateBtn">Check Update</button>
                 </div>
+
+                <div class="panel">
+                    <h3>Launcher Update <span class="tag" id="launcherVersionTag">VERSION —</span></h3>
+                    <p id="launcherUpdateMessage">ตรวจสอบเวอร์ชัน Launcher จาก GitHub Releases</p>
+                    <div class="update-meta">
+                        <span id="launcherUpdateStatus">Waiting</span>
+                        <span id="launcherProgressText">0%</span>
+                    </div>
+                    <div class="progress"><div class="progress-fill" id="launcherProgressFill"></div></div>
+                    <p id="launcherUpdateDetail">ยังไม่ได้ตรวจสอบเวอร์ชัน Launcher</p>
+                    <button class="primary" id="checkLauncherUpdateBtn">Check Launcher Update</button>
+                    <button class="secondary" id="installLauncherUpdateBtn" style="display:none">Download & Install</button>
+                </div>
             </section>
 
             <div class="news">
@@ -530,6 +543,7 @@
     <script>
 const $ = id => document.getElementById(id);
 const API_KEY = 'hshApiBase';
+const UPDATE_API_KEY = 'hshUpdateApiBase';
 const DISMISSED_KEY = 'hshDismissedUpdateVersion';
 
 function toast(message) {
@@ -564,6 +578,15 @@ function closePopup() {
 function apiBase() {
   return (localStorage.getItem(API_KEY) || '')
     .trim().replace(/\/$/, '');
+}
+
+function updateApiBase() {
+  return (localStorage.getItem(UPDATE_API_KEY) || '')
+    .trim().replace(/\/$/, '');
+}
+
+function currentLauncherVersion() {
+  return '1.0.0';
 }
 
 function showLogin() {
@@ -843,23 +866,115 @@ async function checkManifest(manual) {
   }
 }
 
+async function checkLauncherUpdate(manual = true) {
+  const api = updateApiBase();
+  const button = $('checkLauncherUpdateBtn');
+  const installButton = $('installLauncherUpdateBtn');
+  const status = $('launcherUpdateStatus');
+  const detail = $('launcherUpdateDetail');
+  const fill = $('launcherProgressFill');
+
+  if (!api) {
+    status.textContent = 'Update API not configured';
+    detail.textContent = 'กรุณาตั้งค่า Update API URL ใน Settings';
+    toast('กรุณาตั้งค่า Update API URL ใน Settings ก่อน');
+    return;
+  }
+
+  button.disabled = true;
+  installButton.style.display = 'none';
+  status.textContent = 'Checking...';
+  detail.textContent = 'กำลังเชื่อมต่อ GitHub Releases';
+  fill.style.width = '25%';
+  $('launcherProgressText').textContent = '25%';
+
+  try {
+    const url = api + '/api/updates/launcher?currentVersion=' +
+      encodeURIComponent(currentLauncherVersion());
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const data = await response.json();
+    if (!data.version || !data.download_url) {
+      throw new Error('ข้อมูล Release ไม่ครบ');
+    }
+
+    $('launcherVersionTag').textContent = 'LATEST ' + data.version;
+    $('launcherUpdateMessage').textContent = data.message || 'ตรวจสอบเวอร์ชันสำเร็จ';
+    fill.style.width = '100%';
+    $('launcherProgressText').textContent = '100%';
+
+    if (data.update_available) {
+      status.textContent = 'Update available';
+      detail.textContent = 'มี Launcher เวอร์ชัน ' + data.version + ' พร้อมติดตั้ง';
+      installButton.style.display = 'block';
+      installButton.onclick = () => {
+        if (!window.chrome?.webview) {
+          toast('การติดตั้งอัตโนมัติต้องเปิดผ่าน HSHONAD Launcher');
+          return;
+        }
+        installButton.disabled = true;
+        status.textContent = 'Starting installer...';
+        window.chrome.webview.postMessage({
+          type: 'installLauncherUpdate',
+          download_url: data.download_url,
+          version: data.version,
+          sha256: data.sha256 || ''
+        });
+      };
+    } else {
+      status.textContent = 'Up to date';
+      detail.textContent = 'คุณใช้ Launcher เวอร์ชันล่าสุดแล้ว';
+    }
+  } catch (error) {
+    fill.style.width = '0%';
+    $('launcherProgressText').textContent = '0%';
+    status.textContent = 'Check failed';
+    detail.textContent = error.message;
+    if (manual) toast('ตรวจสอบ Launcher Update ไม่สำเร็จ: ' + error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
 $('loginBtn').onclick = showLogin;
 $('checkUpdateBtn').onclick = () => showUpdate();
+$('checkLauncherUpdateBtn').onclick = () => checkLauncherUpdate(true);
 
 $('settingsBtn').onclick = () => {
   openPopup('Settings', `
-    <label for="apiInput">Launcher API URL</label>
+    <label for="apiInput">Launcher API URL (Login / Whitelist)</label>
     <input class="field" id="apiInput"
-      placeholder="http://localhost:3000"
+      placeholder="https://your-existing-backend.onrender.com"
       value="${escapeHTML(apiBase())}">
-    <button class="primary" id="saveApi">บันทึก API URL</button>
+    <label for="updateApiInput">Update API URL (GitHub Releases)</label>
+    <input class="field" id="updateApiInput"
+      placeholder="https://your-update-api.onrender.com"
+      value="${escapeHTML(updateApiBase())}">
+    <button class="primary" id="saveApi">บันทึก API URLs</button>
   `);
 
   $('saveApi').onclick = () => {
     const value = $('apiInput').value.trim().replace(/\/$/, '');
+    const updateValue = $('updateApiInput').value.trim().replace(/\/$/, '');
+
+    for (const candidate of [value, updateValue]) {
+      if (!candidate) continue;
+      try {
+        const parsed = new URL(candidate);
+        if (!['https:', 'http:'].includes(parsed.protocol) ||
+            parsed.username || parsed.password || parsed.search || parsed.hash) {
+          throw new Error();
+        }
+      } catch (_) {
+        toast('URL ไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง');
+        return;
+      }
+    }
+
     localStorage.setItem(API_KEY, value);
+    localStorage.setItem(UPDATE_API_KEY, updateValue);
     closePopup();
-    toast('บันทึก API URL แล้ว');
+    toast('บันทึก API URLs แล้ว');
   };
 };
 
