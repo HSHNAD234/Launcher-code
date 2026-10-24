@@ -121,6 +121,26 @@ namespace HSHONAD_Launcher
             }
         }
 
+        private static bool HasNonEmptyQueryParameter(Uri uri, string parameterName)
+        {
+            foreach (string part in uri.Query.TrimStart('?').Split('&'))
+            {
+                if (string.IsNullOrWhiteSpace(part))
+                    continue;
+
+                string[] pair = part.Split(new[] { '=' }, 2);
+                string name = Uri.UnescapeDataString(pair[0].Replace("+", " "));
+                if (!string.Equals(name, parameterName, StringComparison.Ordinal))
+                    continue;
+
+                return pair.Length == 2 &&
+                       !string.IsNullOrWhiteSpace(
+                           Uri.UnescapeDataString(pair[1].Replace("+", " ")));
+            }
+
+            return false;
+        }
+
         private async Task StartDiscordLoginAsync(CancellationToken token)
         {
             await SendToPageAsync(new
@@ -162,8 +182,14 @@ namespace HSHONAD_Launcher
                     ?? throw new Exception("ไม่มี OAuth URL");
 
                 if (!Uri.TryCreate(verifyUrl, UriKind.Absolute, out var uri) ||
+                    !Uri.TryCreate(BackendBaseUrl, UriKind.Absolute, out var backendUri) ||
                     uri.Scheme != Uri.UriSchemeHttps ||
-                    uri.Host != "discord.com")
+                    !string.Equals(uri.Host, backendUri.Host, StringComparison.OrdinalIgnoreCase) ||
+                    uri.Port != backendUri.Port ||
+                    !string.Equals(uri.AbsolutePath, "/auth/discord", StringComparison.Ordinal) ||
+                    !string.IsNullOrEmpty(uri.UserInfo) ||
+                    !string.IsNullOrEmpty(uri.Fragment) ||
+                    !HasNonEmptyQueryParameter(uri, "state"))
                 {
                     throw new Exception("URL สำหรับ Login ไม่ถูกต้อง");
                 }
