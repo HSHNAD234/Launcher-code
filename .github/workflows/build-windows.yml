@@ -28,3 +28,15 @@ jobs:
 
       - name: Build Release
         run: dotnet build ".\HSHONAD Launcher.csproj" --configuration Release --no-restore
+
+      - name: Package source ZIP
+        shell: pwsh
+        run: git archive --format=zip --output="HSHONAD-Launcher-source.zip" HEAD
+
+      - name: Upload source ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: HSHONAD-Launcher-source
+          path: HSHONAD-Launcher-source.zip
+          if-no-files-found: error
+          retention-days: 14
