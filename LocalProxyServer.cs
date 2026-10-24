@@ -1,6 +1,8 @@
-﻿
+
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -12,18 +14,47 @@ namespace HSHONAD_Launcher
     public sealed class LocalProxyServer : IAsyncDisposable
     {
         private readonly int _port;
+        private readonly HashSet<string> _allowedHosts;
         private TcpListener? _listener;
         private CancellationTokenSource? _cts;
         private Task? _acceptTask;
 
         public bool IsRunning => _listener != null;
 
-        public LocalProxyServer(int port = 8888)
+        public LocalProxyServer(
+            int port = 8888,
+            IEnumerable<string>? allowedHosts = null)
         {
             if (port < 1024 || port > 65535)
                 throw new ArgumentOutOfRangeException(nameof(port));
 
             _port = port;
+            _allowedHosts = new HashSet<string>(
+                (allowedHosts ?? Array.Empty<string>())
+                    .Where(host => !string.IsNullOrWhiteSpace(host))
+                    .Select(host => host.Trim().ToLowerInvariant()),
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        private bool IsHostAllowed(string host)
+        {
+            string normalized = host.Trim().TrimEnd('.').ToLowerInvariant();
+            foreach (string rule in _allowedHosts)
+            {
+                if (rule.StartsWith("*.", StringComparison.Ordinal))
+                {
+                    string suffix = rule[1..];
+                    if (normalized.EndsWith(suffix, StringComparison.Ordinal) &&
+                        normalized.Length > suffix.Length)
+                        return true;
+                }
+                else if (string.Equals(normalized, rule, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         public void Start()
@@ -95,10 +126,12 @@ namespace HSHONAD_Launcher
                             UriKind.Absolute,
                             out Uri? target) ||
                         string.IsNullOrWhiteSpace(target.Host) ||
-                        target.Port != 443)
+                        target.Port != 443 ||
+                        !IsHostAllowed(target.Host))
                     {
                         await SendErrorAsync(
-                            stream, 403, "Target not allowed");
+                            stream, 403,
+                            "Target not allowed. Configure an exact host or *.domain rule in HSHONAD Launcher Settings.");
                         return;
                     }
 
