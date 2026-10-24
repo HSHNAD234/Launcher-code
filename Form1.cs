@@ -25,6 +25,7 @@ namespace HSHONAD_Launcher
         private LocalProxyServer? _proxy;
         private bool _autoLoginStarted;
         private bool _loginInProgress;
+        private DateTimeOffset _backendRateLimitedUntil = DateTimeOffset.MinValue;
 
         public Form1() => InitializeComponent();
 
@@ -216,6 +217,18 @@ namespace HSHONAD_Launcher
 
         private async Task StartDiscordLoginAsync(CancellationToken token)
         {
+            if (_backendRateLimitedUntil > DateTimeOffset.UtcNow)
+            {
+                int remaining = (int)Math.Ceiling((_backendRateLimitedUntil - DateTimeOffset.UtcNow).TotalSeconds);
+                await SendToPageAsync(new
+                {
+                    type = "discordStatus",
+                    status = "error",
+                    message = $"Discord จำกัดคำขออยู่ กรุณารออีกประมาณ {remaining} วินาที"
+                });
+                return;
+            }
+
             await SendToPageAsync(new
             {
                 type = "discordStatus",
@@ -235,6 +248,28 @@ namespace HSHONAD_Launcher
 
                 if (!response.IsSuccessStatusCode)
                 {
+                    if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                    {
+                        double retrySeconds = 60;
+                        if (response.Headers.RetryAfter?.Delta is TimeSpan retryDelta)
+                            retrySeconds = Math.Max(1, retryDelta.TotalSeconds);
+                        else if (response.Headers.RetryAfter?.Date is DateTimeOffset retryDate)
+                            retrySeconds = Math.Max(1, (retryDate - DateTimeOffset.UtcNow).TotalSeconds);
+                        else
+                        {
+                            try
+                            {
+                                using var errorDoc = JsonDocument.Parse(body);
+                                if (errorDoc.RootElement.TryGetProperty("retry_after", out var retryValue) &&
+                                    retryValue.TryGetDouble(out double bodyRetry) && bodyRetry >= 0)
+                                    retrySeconds = Math.Max(1, bodyRetry);
+                            }
+                            catch { }
+                        }
+                        _backendRateLimitedUntil = DateTimeOffset.UtcNow.AddSeconds(Math.Ceiling(retrySeconds));
+                        throw new Exception($"Backend กำลังจำกัดคำขอ กรุณารอประมาณ {Math.Ceiling(retrySeconds)} วินาที");
+                    }
+
                     throw new Exception(
                         $"Backend HTTP {(int)response.StatusCode}: {body}");
                 }
