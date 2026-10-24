@@ -615,6 +615,14 @@ namespace HSHONAD_Launcher
             {
                 await RefreshGameStateAsync();
             }
+            catch (Exception ex)
+            {
+                await SendToPageAsync(new
+                {
+                    type = "launcherStatus",
+                    message = "ตรวจสอบสถานะเกมไม่สำเร็จ: " + ex.Message
+                });
+            }
             finally
             {
                 _monitorTickBusy = false;
